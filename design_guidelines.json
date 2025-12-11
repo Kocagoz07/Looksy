@@ -1,0 +1,151 @@
+{
+  "identity": {
+    "name": "Looksy",
+    "persona": "E1: The Anti-AI Designer",
+    "core_philosophy": "Fashion Magazine x Social Network. Minimalist White Global Theme with Radical Contextual Inversions.",
+    "vibe": "High-Fashion, Editorial, Exclusive, Monetized."
+  },
+  "typography": {
+    "primary_font": {
+      "name": "Playfair Display",
+      "type": "Serif",
+      "usage": "Headings, Category Titles, 'Looksy' Logo",
+      "fallback": "serif",
+      "google_font_url": "https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,600;0,700;1,400&display=swap",
+      "note": "Chosen as the high-quality Google Font alternative to 'Orange Avenue' for stability."
+    },
+    "secondary_font": {
+      "name": "Manrope",
+      "type": "Sans-serif",
+      "usage": "Body text, UI elements, Buttons, Inputs",
+      "fallback": "sans-serif",
+      "google_font_url": "https://fonts.googleapis.com/css2?family=Manrope:wght@300;400;500;600;700&display=swap"
+    }
+  },
+  "colors": {
+    "global": {
+      "background": "#FFFFFF",
+      "foreground": "#000000",
+      "accent": "#000000",
+      "border": "#E5E5E5"
+    },
+    "categories": {
+      "men": {
+        "name": "Spade",
+        "background": "#050505",
+        "foreground": "#FFFFFF",
+        "accent": "#A3A3A3",
+        "border": "#262626",
+        "icon_color": "#FFFFFF"
+      },
+      "women": {
+        "name": "Hearts",
+        "background": "#4A0404",
+        "foreground": "#FFFFFF",
+        "accent": "#FFD700",
+        "border": "#7F1D1D",
+        "icon_color": "#FF0000"
+      },
+      "stars": {
+        "name": "Stars",
+        "background": "#FFFFFF",
+        "foreground": "#000000",
+        "accent": "#FFD700",
+        "border": "#E5E5E5",
+        "icon_color": "#FFD700"
+      }
+    }
+  },
+  "layout_strategies": {
+    "global_spacing": "Generous. Use p-6 or p-8 for containers. Avoid cramped UI.",
+    "navigation": {
+      "style": "Tab-based top or bottom navigation depending on device.",
+      "icons": "Large, distinct icons (Spade, Heart, Star).",
+      "behavior": "Clicking a tab MUST change the entire page theme (bg color) instantly."
+    },
+    "feed": {
+      "style": "Editorial Feed. Not just a list of cards.",
+      "image_aspect": "Square (1:1) strictly enforced (1080x1080).",
+      "metadata_display": "Minimalist. Overlay price tags on hover or click."
+    },
+    "stars_grid": {
+      "style": "Bento Grid / Masonry",
+      "rule": "Only display photos with >10k likes here.",
+      "highlight": "Gold border or glow for these elite items."
+    }
+  },
+  "components": {
+    "buttons": {
+      "style": "Sharp edges or Pill shape. No default rounded-md.",
+      "primary": "bg-black text-white hover:bg-gray-800 (Global/Men), bg-white text-dark-red (Women)",
+      "secondary": "border border-current bg-transparent"
+    },
+    "cards": {
+      "style": "Cardless. Use whitespace to separate items. If borders are needed, use 1px opacity-10.",
+      "interaction": "Scale up slightly on hover (scale-105)."
+    },
+    "inputs": {
+      "style": "Underlined only (border-b) or minimal bg-gray-50. No heavy borders."
+    }
+  },
+  "features_and_logic": {
+    "monetization": {
+      "logic": "0-1k likes = $0.05/like; 1k-3k = $0.10/like; 3k-10k = $0.20/like; >10k = $0.50/like.",
+      "display": "Private 'Total Earnings' box on user profile. Use a blurred glass effect container."
+    },
+    "upload_flow": {
+      "required_fields": ["Image (1:1)", "Caption"],
+      "optional_fields": ["Music", "Location", "Venue", "Product Link", "Total Price"],
+      "ui": "Clean, step-by-step wizard or single elegant form."
+    },
+    "collaboration": {
+      "button_text": "Collaborate",
+      "placement": "Prominent on User Profile header."
+    }
+  },
+  "assets": {
+    "icons": {
+      "library": "lucide-react",
+      "mapping": {
+        "men": "Spade",
+        "women": "Heart",
+        "stars": "Star",
+        "upload": "Plus",
+        "profile": "User",
+        "home": "Home"
+      }
+    },
+    "images": {
+      "men_hero": [
+        "https://images.unsplash.com/photo-1764698072732-ea0230fc5d8e?crop=entropy&cs=srgb&fm=jpg&ixid=M3w3NTY2NzF8MHwxfHNlYXJjaHwyfHxoaWdoJTIwZmFzaGlvbiUyMG1hbGUlMjBtb2RlbCUyMGVkaXRvcmlhbCUyMHBvcnRyYWl0JTIwYmxhY2slMjBiYWNrZ3JvdW5kfGVufDB8fHx8MTc2NTQ2MTkzNHww&ixlib=rb-4.1.0&q=85",
+        "https://images.unsplash.com/photo-1761522002366-870191e79f2a?crop=entropy&cs=srgb&fm=jpg&ixid=M3w3NTY2NzF8MHwxfHNlYXJjaHwxfHxoaWdoJTIwZmFzaGlvbiUyMG1hbGUlMjBtb2RlbCUyMGVkaXRvcmlhbCUyMHBvcnRyYWl0JTIwYmxhY2slMjBiYWNrZ3JvdW5kfGVufDB8fHx8MTc2NTQ2MTkzNHww&ixlib=rb-4.1.0&q=85"
+      ],
+      "women_hero": [
+        "https://images.unsplash.com/photo-1739297718499-ba4608139869?crop=entropy&cs=srgb&fm=jpg&ixid=M3w3NDk1Nzd8MHwxfHNlYXJjaHwxfHxoaWdoJTIwZmFzaGlvbiUyMGZlbWFsZSUyMG1vZGVsJTIwZWRpdG9yaWFsJTIwcG9ydHJhaXQlMjBkYXJrJTIwcmVkJTIwYmFja2dyb3VuZHxlbnwwfHx8fDE3NjU0NjE5MzZ8MA&ixlib=rb-4.1.0&q=85",
+        "https://images.unsplash.com/photo-1724743887690-0f9c68c0f560?crop=entropy&cs=srgb&fm=jpg&ixid=M3w3NDk1Nzd8MHwxfHNlYXJjaHwzfHxoaWdoJTIwZmFzaGlvbiUyMGZlbWFsZSUyMG1vZGVsJTIwZWRpdG9yaWFsJTIwcG9ydHJhaXQlMjBkYXJrJTIwcmVkJTIwYmFja2dyb3VuZHxlbnwwfHx8fDE3NjU0NjE5MzZ8MA&ixlib=rb-4.1.0&q=85"
+      ],
+      "stars_hero": [
+        "https://images.unsplash.com/photo-1749302380578-ee4ab4d5bb23?crop=entropy&cs=srgb&fm=jpg&ixid=M3w3NDk1Nzd8MHwxfHNlYXJjaHwzfHxjZWxlYnJpdHklMjBmYXNoaW9uJTIwcmVkJTIwY2FycGV0JTIwcGFwYXJhenppJTIwc3R5bGV8ZW58MHx8fHwxNzY1NDYxOTQwfDA&ixlib=rb-4.1.0&q=85"
+      ],
+      "products": [
+        "https://images.unsplash.com/photo-1761778304143-4c89e7dd2457?crop=entropy&cs=srgb&fm=jpg&ixid=M3w3NDk1NzZ8MHwxfHNlYXJjaHwxfHxsdXh1cnklMjBmYXNoaW9uJTIwcHJvZHVjdCUyMHN0aWxsJTIwbGlmZSUyMG1pbmltYWxpc3R8ZW58MHx8fHwxNzY1NDYxOTQyfDA&ixlib=rb-4.1.0&q=85",
+        "https://images.unsplash.com/photo-1758552322632-ba288778c770?crop=entropy&cs=srgb&fm=jpg&ixid=M3w3NDk1NzZ8MHwxfHNlYXJjaHwyfHxsdXh1cnklMjBmYXNoaW9uJTIwcHJvZHVjdCUyMHN0aWxsJTIwbGlmZSUyMG1pbmltYWxpc3R8ZW58MHx8fHwxNzY1NDYxOTQyfDA&ixlib=rb-4.1.0&q=85"
+      ]
+    }
+  },
+  "instructions_to_main_agent": [
+    "1. SETUP: Install 'lucide-react' and 'clsx' 'tailwind-merge' immediately.",
+    "2. THEME: Implement a 'ThemeContext' that wraps the app. It must hold the current category state (Global, Men, Women, Stars).",
+    "3. ROUTING: /men -> Black Theme. /women -> Red Theme. /stars -> White Theme + Grid. / -> White Theme.",
+    "4. FONTS: Add the Google Fonts links to the index.html or main CSS file. Use 'Playfair Display' for all headings.",
+    "5. AUTH: Mock Google Auth if real creds are missing, but UI must show 'Continue with Google'.",
+    "6. DATA: Create a mock data store for Users, Photos (with likes count), and Comments to demonstrate the logic.",
+    "7. TESTING: Add data-testid to all interactive elements (buttons, inputs, tabs)."
+  ],
+  "universal_guidelines": [
+    "Do not use gradients for the main background. Use solid colors (White, Black, Dark Red).",
+    "Ensure text contrast is AA compliant. White text on Red bg might need opacity adjustments.",
+    "Use 'sonner' for notifications (e.g., 'Comment added', 'Photo uploaded').",
+    "Do not center text in the feed. Left align captions."
+  ]
+}
