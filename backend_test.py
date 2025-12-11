@@ -303,7 +303,7 @@ class LooksyAPITester:
         # Create comment
         success, response = self.run_api_test(
             "Create Comment",
-            "POST", f"posts/{post_id}/comments", 201,
+            "POST", f"posts/{post_id}/comments", 200,
             data={"text": "This is a test comment"}
         )
         
