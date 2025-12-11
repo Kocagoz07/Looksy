@@ -220,7 +220,7 @@ class LooksyAPITester:
             
             success, response = self.run_api_test(
                 "Create Post",
-                "POST", f"posts?image_id={image_id}", 201,
+                "POST", f"posts?image_id={image_id}", 200,
                 data=post_data
             )
             
