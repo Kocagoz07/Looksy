@@ -174,11 +174,6 @@ export default function Dashboard({ category = null }) {
         </div>
       </header>
 
-      {/* Show category selector if user hasn't selected */}
-      {currentUser && !currentUser.category && activeTab !== "stars" && activeTab !== "all" && (
-        <CategorySelector currentUser={currentUser} onCategorySet={fetchCurrentUser} />
-      )}
-
       {/* Content */}
       <main className="max-w-7xl mx-auto px-4 py-8">
         {loading ? (
