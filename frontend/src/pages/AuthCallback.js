@@ -1,69 +1,72 @@
-import { useEffect } from "react";
-import { useNavigate } from "react-router-dom";
+import { useEffect, useState } from "react";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import axios from "axios";
+import { toast } from "sonner";
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 
 export default function AuthCallback() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const [verifying, setVerifying] = useState(true);
 
   useEffect(() => {
     let isMounted = true;
     
-    const processAuth = async () => {
+    const verifyMagicLink = async () => {
       try {
-        const hash = window.location.hash.substring(1);
-        const params = new URLSearchParams(hash);
-        const sessionId = params.get('session_id');
+        const token = searchParams.get('token');
 
-        if (!sessionId) {
+        if (!token) {
+          toast.error("Invalid magic link");
           navigate('/', { replace: true });
           return;
         }
 
-        const response = await axios.post(
-          `${BACKEND_URL}/api/auth/callback`,
-          { session_id: sessionId },
+        const response = await axios.get(
+          `${BACKEND_URL}/api/auth/verify-magic-link?token=${token}`,
           { withCredentials: true }
         );
 
         if (isMounted && response.data) {
-          // Get selected gender from sessionStorage
-          const selectedGender = sessionStorage.getItem('selected_gender');
-          
-          if (selectedGender) {
-            // Update user category
-            await axios.patch(
-              `${BACKEND_URL}/api/users/me?category=${selectedGender}`,
-              {},
-              { withCredentials: true }
-            );
-            sessionStorage.removeItem('selected_gender');
-          }
-          
           sessionStorage.setItem('just_authenticated', 'true');
+          toast.success(`Welcome, ${response.data.name}!`);
           navigate('/dashboard', { replace: true, state: { user: response.data } });
         }
       } catch (err) {
         console.error('Auth error:', err);
+        const errorMsg = err.response?.data?.detail || "Invalid or expired magic link";
+        toast.error(errorMsg);
         if (isMounted) {
-          navigate('/', { replace: true });
+          setTimeout(() => {
+            navigate('/', { replace: true });
+          }, 2000);
+        }
+      } finally {
+        if (isMounted) {
+          setVerifying(false);
         }
       }
     };
 
-    processAuth();
+    verifyMagicLink();
     
     return () => {
       isMounted = false;
     };
-  }, [navigate]);
+  }, [navigate, searchParams]);
 
   return (
     <div className="min-h-screen bg-white flex items-center justify-center">
       <div className="text-center">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-black mx-auto mb-4"></div>
-        <p className="font-manrope text-gray-600">Completing authentication...</p>
+        {verifying ? (
+          <>
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-black mx-auto mb-4"></div>
+            <p className="font-manrope text-gray-600">Verifying your magic link...</p>
+          </>
+        ) : (
+          <p className="font-manrope text-gray-600">Redirecting...</p>
+        )}
       </div>
     </div>
   );
