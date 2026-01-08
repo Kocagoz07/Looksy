@@ -144,6 +144,124 @@ async def get_current_user(request: Request) -> Optional[User]:
     return User(**user_doc)
 
 # Auth endpoints
+@api_router.post("/auth/send-magic-link")
+async def send_magic_link(request: MagicLinkRequest):
+    email = request.email.lower()
+    category = request.category
+    
+    if category not in ["men", "women"]:
+        raise HTTPException(status_code=400, detail="Invalid category")
+    
+    # Generate magic link token
+    token = secrets.token_urlsafe(32)
+    expires_at = datetime.now(timezone.utc) + timedelta(minutes=15)
+    
+    # Store magic link
+    magic_link = MagicLink(
+        email=email,
+        token=token,
+        category=category,
+        expires_at=expires_at
+    )
+    
+    magic_link_dict = magic_link.model_dump()
+    magic_link_dict["expires_at"] = magic_link_dict["expires_at"].isoformat()
+    magic_link_dict["created_at"] = magic_link_dict["created_at"].isoformat()
+    
+    # Delete any existing magic links for this email
+    await db.magic_links.delete_many({"email": email})
+    await db.magic_links.insert_one(magic_link_dict)
+    
+    # In production, send email here. For now, return the link for testing
+    magic_link_url = f"{os.environ.get('FRONTEND_URL', 'http://localhost:3000')}/auth/verify?token={token}"
+    
+    # For development: log the magic link
+    logger.info(f"Magic link for {email}: {magic_link_url}")
+    
+    return {
+        "message": "Magic link sent to your email",
+        "magic_link": magic_link_url  # Remove this in production
+    }
+
+@api_router.get("/auth/verify-magic-link")
+async def verify_magic_link(token: str, response: Response):
+    # Find magic link
+    magic_link_doc = await db.magic_links.find_one({"token": token}, {"_id": 0})
+    
+    if not magic_link_doc:
+        raise HTTPException(status_code=400, detail="Invalid or expired magic link")
+    
+    # Check expiry
+    expires_at = magic_link_doc["expires_at"]
+    if isinstance(expires_at, str):
+        expires_at = datetime.fromisoformat(expires_at)
+    if expires_at.tzinfo is None:
+        expires_at = expires_at.replace(tzinfo=timezone.utc)
+    
+    if expires_at < datetime.now(timezone.utc):
+        await db.magic_links.delete_one({"token": token})
+        raise HTTPException(status_code=400, detail="Magic link has expired")
+    
+    email = magic_link_doc["email"]
+    category = magic_link_doc["category"]
+    
+    # Check if user exists
+    user_doc = await db.users.find_one({"email": email}, {"_id": 0})
+    
+    if user_doc:
+        user_id = user_doc["user_id"]
+        # Update category if changed
+        if user_doc.get("category") != category:
+            await db.users.update_one(
+                {"user_id": user_id},
+                {"$set": {"category": category}}
+            )
+    else:
+        # Create new user
+        user_id = f"user_{uuid.uuid4().hex[:12]}"
+        name = email.split("@")[0].title()
+        new_user = User(
+            user_id=user_id,
+            email=email,
+            name=name,
+            category=category
+        )
+        user_dict = new_user.model_dump()
+        user_dict["created_at"] = user_dict["created_at"].isoformat()
+        await db.users.insert_one(user_dict)
+    
+    # Create session
+    session_token = f"session_{secrets.token_urlsafe(32)}"
+    session_expires_at = datetime.now(timezone.utc) + timedelta(days=7)
+    
+    session = UserSession(
+        user_id=user_id,
+        session_token=session_token,
+        expires_at=session_expires_at
+    )
+    session_dict = session.model_dump()
+    session_dict["expires_at"] = session_dict["expires_at"].isoformat()
+    session_dict["created_at"] = session_dict["created_at"].isoformat()
+    
+    await db.user_sessions.insert_one(session_dict)
+    
+    # Delete used magic link
+    await db.magic_links.delete_one({"token": token})
+    
+    # Set cookie
+    response.set_cookie(
+        key="session_token",
+        value=session_token,
+        httponly=True,
+        secure=True,
+        samesite="none",
+        path="/",
+        max_age=7 * 24 * 60 * 60
+    )
+    
+    user_doc = await db.users.find_one({"user_id": user_id}, {"_id": 0})
+    return User(**user_doc)
+
 @api_router.post("/auth/callback")
 async def auth_callback(request: Request, response: Response):
     body = await request.json()
