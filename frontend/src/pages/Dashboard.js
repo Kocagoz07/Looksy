@@ -4,7 +4,6 @@ import axios from "axios";
 import { Spade, Heart, Star, Plus, User, LogOut, Upload } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import PostCard from "@/components/PostCard";
-import CategorySelector from "@/components/CategorySelector";
 import { toast } from "sonner";
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
