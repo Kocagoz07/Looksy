@@ -13,15 +13,10 @@ import { Toaster } from "@/components/ui/sonner";
 function AppContent() {
   const location = useLocation();
   
-  // Check for session_id in URL hash
-  if (location.hash?.includes('session_id=')) {
-    return <AuthCallback />;
-  }
-  
   return (
     <Routes>
       <Route path="/" element={<LandingPage />} />
-      <Route path="/auth/callback" element={<AuthCallback />} />
+      <Route path="/auth/verify" element={<AuthCallback />} />
       <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
       <Route path="/men" element={<ProtectedRoute><Dashboard category="men" /></ProtectedRoute>} />
       <Route path="/women" element={<ProtectedRoute><Dashboard category="women" /></ProtectedRoute>} />
