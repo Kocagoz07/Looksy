@@ -80,6 +80,18 @@ class UserSession(BaseModel):
     expires_at: datetime
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
+class MagicLink(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    email: str
+    token: str
+    category: str  # "men" or "women"
+    expires_at: datetime
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+class MagicLinkRequest(BaseModel):
+    email: EmailStr
+    category: str
+
 class PostCreate(BaseModel):
     caption: Optional[str] = None
     music: Optional[str] = None
