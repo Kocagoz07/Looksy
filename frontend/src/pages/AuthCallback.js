@@ -28,6 +28,19 @@ export default function AuthCallback() {
         );
 
         if (isMounted && response.data) {
+          // Get selected gender from sessionStorage
+          const selectedGender = sessionStorage.getItem('selected_gender');
+          
+          if (selectedGender) {
+            // Update user category
+            await axios.patch(
+              `${BACKEND_URL}/api/users/me?category=${selectedGender}`,
+              {},
+              { withCredentials: true }
+            );
+            sessionStorage.removeItem('selected_gender');
+          }
+          
           sessionStorage.setItem('just_authenticated', 'true');
           navigate('/dashboard', { replace: true, state: { user: response.data } });
         }

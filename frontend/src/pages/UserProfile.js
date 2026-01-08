@@ -56,16 +56,19 @@ export default function UserProfile() {
   }
 
   const isOwnProfile = currentUser?.user_id === userId;
+  const bgColor = user.category === 'men' ? '#050505' : user.category === 'women' ? '#4A0404' : '#FFFFFF';
+  const textColor = user.category === 'men' || user.category === 'women' ? '#FFFFFF' : '#000000';
 
   return (
-    <div className="min-h-screen bg-white">
-      <header className="border-b px-4 py-4 flex items-center gap-4 sticky top-0 bg-white z-10">
+    <div className="min-h-screen" style={{ backgroundColor: bgColor, color: textColor }}>
+      <header className="border-b border-opacity-20 px-4 py-4 flex items-center gap-4 sticky top-0 z-10" style={{ borderColor: textColor, backgroundColor: bgColor }}>
         <Button
           data-testid="back-btn"
           onClick={() => navigate(-1)}
           variant="ghost"
           size="icon"
           className="rounded-full"
+          style={{ color: textColor }}
         >
           <ArrowLeft className="w-5 h-5" />
         </Button>
@@ -79,44 +82,49 @@ export default function UserProfile() {
             <img src={user.picture} alt={user.name} className="w-24 h-24 rounded-full" />
           ) : (
             <div className="w-24 h-24 rounded-full bg-gray-200 flex items-center justify-center">
-              <span className="font-playfair text-3xl font-semibold">{user.name[0]}</span>
+              <span className="font-playfair text-3xl font-semibold text-black">{user.name[0]}</span>
             </div>
           )}
           
           <div className="flex-1 text-center sm:text-left">
             <h2 className="font-playfair text-3xl font-bold mb-2">{user.name}</h2>
-            {user.category && (
-              <p className="font-manrope text-sm text-gray-600 capitalize mb-4">{user.category}'s Fashion</p>
-            )}
             
-            <div className="flex flex-wrap items-center justify-center sm:justify-start gap-4">
+            <div className="flex flex-col sm:flex-row items-center sm:items-start gap-4 mb-4">
               <div className="text-center sm:text-left">
                 <p className="font-manrope text-2xl font-bold">{posts.length}</p>
-                <p className="font-manrope text-sm text-gray-600">Posts</p>
+                <p className="font-manrope text-sm opacity-70">Posts</p>
               </div>
-              
+            </div>
+            
+            {/* Action Boxes */}
+            <div className="flex flex-wrap items-center justify-center sm:justify-start gap-3">
               {isOwnProfile && (
-                <div className="glass px-6 py-3 rounded-lg" data-testid="earnings-box">
+                <div 
+                  className="px-6 py-3 rounded-lg border border-white border-opacity-20" 
+                  style={{ backgroundColor: 'transparent' }}
+                  data-testid="earnings-box"
+                >
                   <div className="flex items-center gap-2 mb-1">
-                    <DollarSign className="w-4 h-4 text-green-600" />
-                    <p className="font-manrope text-xs text-gray-600 font-semibold">Total Earnings</p>
+                    <DollarSign className="w-4 h-4" style={{ color: '#FFFFFF' }} />
+                    <p className="font-manrope text-xs font-semibold" style={{ color: '#FFFFFF' }}>Total Earnings</p>
                   </div>
-                  <p className="font-playfair text-2xl font-bold text-green-600">
+                  <p className="font-playfair text-2xl font-bold" style={{ color: '#FFFFFF' }}>
                     ${user.earnings.toFixed(2)}
                   </p>
                 </div>
               )}
+              
+              {!isOwnProfile && (
+                <Button
+                  data-testid="collaborate-btn"
+                  className="px-6 py-3 rounded-lg font-manrope font-semibold flex items-center gap-2"
+                  style={{ backgroundColor: '#013220', color: '#FFFFFF' }}
+                >
+                  <Briefcase className="w-4 h-4" />
+                  Collaborate
+                </Button>
+              )}
             </div>
-            
-            {!isOwnProfile && (
-              <Button
-                data-testid="collaborate-btn"
-                className="mt-4 bg-black text-white hover:bg-gray-800 font-manrope font-semibold rounded-full flex items-center gap-2"
-              >
-                <Briefcase className="w-4 h-4" />
-                Collaborate
-              </Button>
-            )}
           </div>
         </div>
 
@@ -125,7 +133,7 @@ export default function UserProfile() {
           <h3 className="font-playfair text-2xl font-bold mb-6">Posts</h3>
           {posts.length === 0 ? (
             <div className="text-center py-12">
-              <p className="font-manrope text-gray-500">No posts yet</p>
+              <p className="font-manrope opacity-70">No posts yet</p>
             </div>
           ) : (
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">

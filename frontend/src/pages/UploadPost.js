@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { ArrowLeft, Upload, Plus, X } from "lucide-react";
+import { ArrowLeft, Upload, Plus, X, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -32,6 +32,12 @@ export default function UploadPost() {
       setImageFile(file);
       setImagePreview(URL.createObjectURL(file));
     }
+  };
+
+  const handleDeleteImage = () => {
+    setImageFile(null);
+    setImagePreview(null);
+    toast.success("Image removed");
   };
 
   const addProduct = () => {
@@ -123,11 +129,23 @@ export default function UploadPost() {
             <div className="border-2 border-dashed border-gray-300 rounded-lg p-8 text-center">
               {imagePreview ? (
                 <div className="space-y-4">
-                  <img
-                    src={imagePreview}
-                    alt="Preview"
-                    className="max-w-sm mx-auto rounded-lg"
-                  />
+                  <div className="relative inline-block">
+                    <img
+                      src={imagePreview}
+                      alt="Preview"
+                      className="max-w-sm mx-auto rounded-lg"
+                    />
+                    <Button
+                      data-testid="delete-image-btn"
+                      type="button"
+                      variant="destructive"
+                      size="icon"
+                      onClick={handleDeleteImage}
+                      className="absolute top-2 right-2 rounded-full bg-red-500 hover:bg-red-600"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </Button>
+                  </div>
                   <Button
                     type="button"
                     variant="outline"
