@@ -42,6 +42,13 @@ class User(BaseModel):
     picture: Optional[str] = None
     category: Optional[str] = None  # "men", "women", or None
     earnings: float = 0.0
+    earnings_eur: float = 0.0
+    kyc_verified: bool = False
+    kyc_documents: Optional[dict] = None
+    payout_method: Optional[str] = None  # "paypal" or "stripe"
+    payout_email: Optional[str] = None
+    stripe_account_id: Optional[str] = None
+    starred_posts: List[str] = []
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
 class ProductLink(BaseModel):
