@@ -517,10 +517,16 @@ async def toggle_like(request: Request, post_id: str):
         new_likes = post["likes_count"] + 1
     
     # Update post owner's earnings
-    earnings = calculate_earnings(new_likes)
+    earnings_usd = calculate_earnings(new_likes)
+    earnings_eur = usd_to_eur(earnings_usd)
     await db.users.update_one(
         {"user_id": post["user_id"]},
-        {"$set": {"earnings": earnings}}
+        {
+            "$set": {
+                "earnings": earnings_usd,
+                "earnings_eur": earnings_eur
+            }
+        }
     )
     
     return {"likes_count": new_likes, "liked": user.user_id not in liked_by}
