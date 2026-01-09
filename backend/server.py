@@ -371,10 +371,17 @@ async def create_post(request: Request, post_data: PostCreate, image_id: str):
         raise HTTPException(status_code=401, detail="Not authenticated")
     
     post_id = f"post_{uuid.uuid4().hex[:12]}"
+    
+    # Convert USD to EUR if price provided
+    total_price_eur = None
+    if post_data.total_price:
+        total_price_eur = usd_to_eur(post_data.total_price)
+    
     post = Post(
         post_id=post_id,
         user_id=user.user_id,
         image_id=image_id,
+        total_price_eur=total_price_eur,
         **post_data.model_dump()
     )
     
@@ -386,10 +393,10 @@ async def create_post(request: Request, post_data: PostCreate, image_id: str):
 
 @api_router.get("/posts", response_model=List[Post])
 async def get_posts(category: Optional[str] = None, limit: int = 50):
-    query = {}
+    query = {"is_deleted": {"$ne": True}}
     if category:
         # Get users in this category
-        users = await db.users.find({"category": category}, {"user_id": 1, "_id": 0}).to_list(1000)
+        users = await db.users.find({" category": category}, {"user_id": 1, "_id": 0}).to_list(1000)
         user_ids = [u["user_id"] for u in users]
         query["user_id"] = {"$in": user_ids}
     
@@ -403,7 +410,7 @@ async def get_posts(category: Optional[str] = None, limit: int = 50):
 
 @api_router.get("/posts/stars", response_model=List[Post])
 async def get_stars_posts(limit: int = 50):
-    posts = await db.posts.find({"likes_count": {"$gte": 10000}}, {"_id": 0}).sort("likes_count", -1).limit(limit).to_list(limit)
+    posts = await db.posts.find({"likes_count": {"$gte": 10000}, "is_deleted": {"$ne": True}}, {"_id": 0}).sort("likes_count", -1).limit(limit).to_list(limit)
     
     for post in posts:
         if isinstance(post["created_at"], str):
