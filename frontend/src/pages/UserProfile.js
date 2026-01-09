@@ -103,19 +103,41 @@ export default function UserProfile() {
             {/* Action Boxes */}
             <div className="flex flex-wrap items-center justify-center sm:justify-start gap-3">
               {isOwnProfile && (
-                <div 
-                  className="px-6 py-3 rounded-lg border border-white border-opacity-20" 
-                  style={{ backgroundColor: 'transparent' }}
-                  data-testid="earnings-box"
-                >
-                  <div className="flex items-center gap-2 mb-1">
-                    <DollarSign className="w-4 h-4" style={{ color: '#FFFFFF' }} />
-                    <p className="font-manrope text-xs font-semibold" style={{ color: '#FFFFFF' }}>Total Earnings</p>
+                <>
+                  <div 
+                    className="px-6 py-3 rounded-lg border border-white border-opacity-20 cursor-pointer hover:border-opacity-40 transition-all" 
+                    style={{ backgroundColor: 'transparent' }}
+                    data-testid="earnings-box"
+                    onClick={() => navigate('/payouts')}
+                  >
+                    <div className="flex items-center gap-2 mb-1">
+                      <DollarSign className="w-4 h-4" style={{ color: '#FFFFFF' }} />
+                      <p className="font-manrope text-xs font-semibold" style={{ color: '#FFFFFF' }}>Total Earnings</p>
+                    </div>
+                    <p className="font-playfair text-2xl font-bold" style={{ color: '#FFFFFF' }}>
+                      €{user.earnings_eur?.toFixed(2) || '0.00'}
+                    </p>
+                    <p className="font-manrope text-xs opacity-70" style={{ color: '#FFFFFF' }}>
+                      ${user.earnings?.toFixed(2) || '0.00'} USD
+                    </p>
                   </div>
-                  <p className="font-playfair text-2xl font-bold" style={{ color: '#FFFFFF' }}>
-                    ${user.earnings.toFixed(2)}
-                  </p>
-                </div>
+                  
+                  {user.kyc_verified && (
+                    <div className="flex items-center gap-2 px-4 py-2 bg-green-600 rounded-lg">
+                      <CheckCircle className="w-4 h-4 text-white" />
+                      <span className="font-manrope text-xs font-semibold text-white">Verified</span>
+                    </div>
+                  )}
+                  
+                  <Button
+                    onClick={() => navigate('/payouts')}
+                    className="px-6 py-3 rounded-lg font-manrope font-semibold flex items-center gap-2"
+                    style={{ backgroundColor: '#013220', color: '#FFFFFF' }}
+                  >
+                    <Wallet className="w-4 h-4" />
+                    Payouts
+                  </Button>
+                </>
               )}
               
               {!isOwnProfile && (
