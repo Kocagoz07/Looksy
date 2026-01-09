@@ -435,10 +435,53 @@ async def delete_post(request: Request, post_id: str):
     if post["user_id"] != user.user_id:
         raise HTTPException(status_code=403, detail="Not authorized")
     
-    await db.posts.delete_one({"post_id": post_id})
-    await db.comments.delete_many({"post_id": post_id})
+    # Soft delete
+    await db.posts.update_one(
+        {"post_id": post_id},
+        {
+            "$set": {
+                "is_deleted": True,
+                "deleted_at": datetime.now(timezone.utc).isoformat()
+            }
+        }
+    )
     
-    return {"message": "Post deleted"}
+    return {"message": "Post deleted successfully"}
+
+@api_router.post("/posts/{post_id}/star")
+async def toggle_star(request: Request, post_id: str):
+    user = await get_current_user(request)
+    if not user:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    
+    post = await db.posts.find_one({"post_id": post_id}, {"_id": 0})
+    if not post:
+        raise HTTPException(status_code=404, detail="Post not found")
+    
+    starred_by = post.get("starred_by", [])
+    
+    if user.user_id in starred_by:
+        # Unstar
+        await db.posts.update_one(
+            {"post_id": post_id},
+            {"$pull": {"starred_by": user.user_id}}
+        )
+        await db.users.update_one(
+            {"user_id": user.user_id},
+            {"$pull": {"starred_posts": post_id}}
+        )
+        return {"starred": False}
+    else:
+        # Star
+        await db.posts.update_one(
+            {"post_id": post_id},
+            {"$addToSet": {"starred_by": user.user_id}}
+        )
+        await db.users.update_one(
+            {"user_id": user.user_id},
+            {"$addToSet": {"starred_posts": post_id}}
+        )
+        return {"starred": True}
 
 @api_router.post("/posts/{post_id}/like")
 async def toggle_like(request: Request, post_id: str):
