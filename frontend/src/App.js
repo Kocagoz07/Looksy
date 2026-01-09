@@ -25,6 +25,7 @@ function AppContent() {
       <Route path="/upload" element={<ProtectedRoute><UploadPost /></ProtectedRoute>} />
       <Route path="/post/:postId" element={<ProtectedRoute><PostDetail /></ProtectedRoute>} />
       <Route path="/profile/:userId" element={<ProtectedRoute><UserProfile /></ProtectedRoute>} />
+      <Route path="/payouts" element={<ProtectedRoute><PayoutsPage /></ProtectedRoute>} />
     </Routes>
   );
 }
