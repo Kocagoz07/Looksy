@@ -114,6 +114,38 @@ class PostCreate(BaseModel):
 class CommentCreate(BaseModel):
     text: str
 
+class KYCSubmission(BaseModel):
+    full_name: str
+    date_of_birth: str
+    address: str
+    id_type: str  # "passport", "drivers_license", "national_id"
+    id_number: str
+
+class PayoutMethodSetup(BaseModel):
+    method: str  # "paypal" or "stripe"
+    payout_email: Optional[str] = None
+    stripe_account_id: Optional[str] = None
+
+class PayoutRequest(BaseModel):
+    amount_eur: float
+
+class Payout(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    payout_id: str
+    user_id: str
+    amount_eur: float
+    method: str
+    status: str  # "pending", "completed", "failed"
+    payout_email: Optional[str] = None
+    transaction_id: Optional[str] = None
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    completed_at: Optional[datetime] = None
+
+# Helper function to convert USD to EUR
+def usd_to_eur(usd_amount: float) -> float:
+    rate = float(os.environ.get('USD_TO_EUR_RATE', '0.92'))
+    return round(usd_amount * rate, 2)
+
 # Helper function to calculate earnings
 def calculate_earnings(likes_count: int) -> float:
     if likes_count < 1000:
