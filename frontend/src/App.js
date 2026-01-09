@@ -7,6 +7,7 @@ import Dashboard from "@/pages/Dashboard";
 import UploadPost from "@/pages/UploadPost";
 import PostDetail from "@/pages/PostDetail";
 import UserProfile from "@/pages/UserProfile";
+import PayoutsPage from "@/pages/PayoutsPage";
 import ProtectedRoute from "@/components/ProtectedRoute";
 import { Toaster } from "@/components/ui/sonner";
 
