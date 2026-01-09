@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { ArrowLeft, Briefcase, DollarSign } from "lucide-react";
+import { ArrowLeft, Briefcase, DollarSign, CheckCircle, Wallet } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import PostCard from "@/components/PostCard";
 import axios from "axios";
