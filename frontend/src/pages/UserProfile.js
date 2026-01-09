@@ -39,6 +39,10 @@ export default function UserProfile() {
     }
   };
 
+  const handlePostDelete = (postId) => {
+    setPosts(posts.filter(p => p.post_id !== postId));
+  };
+
   if (loading) {
     return (
       <div className="min-h-screen bg-white flex items-center justify-center">
