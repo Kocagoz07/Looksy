@@ -59,6 +59,10 @@ export default function Dashboard({ category = null }) {
     }
   };
 
+  const handlePostDelete = (postId) => {
+    setPosts(posts.filter(p => p.post_id !== postId));
+  };
+
   const handleLogout = async () => {
     try {
       await axios.post(`${BACKEND_URL}/api/auth/logout`, {}, { withCredentials: true });
