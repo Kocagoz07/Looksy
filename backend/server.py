@@ -65,9 +65,13 @@ class Post(BaseModel):
     location: Optional[str] = None
     venue: Optional[str] = None
     total_price: Optional[float] = None
+    total_price_eur: Optional[float] = None
     products: List[ProductLink] = []
     likes_count: int = 0
     liked_by: List[str] = []  # List of user_ids
+    starred_by: List[str] = []  # List of user_ids who starred this
+    is_deleted: bool = False
+    deleted_at: Optional[datetime] = None
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
 class Comment(BaseModel):
