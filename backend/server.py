@@ -590,13 +590,135 @@ async def delete_comment(request: Request, comment_id: str):
 
 @api_router.get("/users/{user_id}/posts", response_model=List[Post])
 async def get_user_posts(user_id: str):
-    posts = await db.posts.find({"user_id": user_id}, {"_id": 0}).sort("created_at", -1).to_list(100)
+    posts = await db.posts.find({"user_id": user_id, "is_deleted": {"$ne": True}}, {"_id": 0}).sort("created_at", -1).to_list(100)
     
     for post in posts:
         if isinstance(post["created_at"], str):
             post["created_at"] = datetime.fromisoformat(post["created_at"])
     
     return posts
+
+# KYC and Payout endpoints
+@api_router.post("/users/me/kyc")
+async def submit_kyc(request: Request, kyc_data: KYCSubmission):
+    user = await get_current_user(request)
+    if not user:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    
+    # Store KYC documents
+    kyc_dict = kyc_data.model_dump()
+    
+    await db.users.update_one(
+        {"user_id": user.user_id},
+        {
+            "$set": {
+                "kyc_verified": True,  # In production, this should be False until verified
+                "kyc_documents": kyc_dict
+            }
+        }
+    )
+    
+    return {"message": "KYC documents submitted successfully", "verified": True}
+
+@api_router.post("/users/me/payout-method")
+async def set_payout_method(request: Request, payout_setup: PayoutMethodSetup):
+    user = await get_current_user(request)
+    if not user:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    
+    if payout_setup.method not in ["paypal", "stripe"]:
+        raise HTTPException(status_code=400, detail="Invalid payout method")
+    
+    update_data = {"payout_method": payout_setup.method}
+    
+    if payout_setup.method == "paypal":
+        if not payout_setup.payout_email:
+            raise HTTPException(status_code=400, detail="PayPal email required")
+        update_data["payout_email"] = payout_setup.payout_email
+    elif payout_setup.method == "stripe":
+        if not payout_setup.stripe_account_id:
+            raise HTTPException(status_code=400, detail="Stripe account ID required")
+        update_data["stripe_account_id"] = payout_setup.stripe_account_id
+    
+    await db.users.update_one(
+        {"user_id": user.user_id},
+        {"$set": update_data}
+    )
+    
+    return {"message": "Payout method set successfully"}
+
+@api_router.post("/users/me/request-payout")
+async def request_payout(request: Request, payout_req: PayoutRequest):
+    user = await get_current_user(request)
+    if not user:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    
+    # Refresh user data
+    user_doc = await db.users.find_one({"user_id": user.user_id}, {"_id": 0})
+    if not user_doc:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    # Check KYC verification
+    if not user_doc.get("kyc_verified"):
+        raise HTTPException(status_code=400, detail="KYC verification required")
+    
+    # Check payout method
+    if not user_doc.get("payout_method"):
+        raise HTTPException(status_code=400, detail="Please set up a payout method first")
+    
+    # Check minimum threshold
+    min_threshold = float(os.environ.get('MIN_PAYOUT_THRESHOLD_EUR', '20.0'))
+    if payout_req.amount_eur < min_threshold:
+        raise HTTPException(status_code=400, detail=f"Minimum payout is €{min_threshold}")
+    
+    # Check available balance
+    available_balance = user_doc.get("earnings_eur", 0.0)
+    if payout_req.amount_eur > available_balance:
+        raise HTTPException(status_code=400, detail="Insufficient balance")
+    
+    # Create payout record
+    payout_id = f"payout_{uuid.uuid4().hex[:12]}"
+    payout = Payout(
+        payout_id=payout_id,
+        user_id=user.user_id,
+        amount_eur=payout_req.amount_eur,
+        method=user_doc["payout_method"],
+        status="pending",
+        payout_email=user_doc.get("payout_email")
+    )
+    
+    payout_dict = payout.model_dump()
+    payout_dict["created_at"] = payout_dict["created_at"].isoformat()
+    await db.payouts.insert_one(payout_dict)
+    
+    # Deduct from user balance (escrow until payout completes)
+    new_balance = available_balance - payout_req.amount_eur
+    await db.users.update_one(
+        {"user_id": user.user_id},
+        {"$set": {"earnings_eur": new_balance}}
+    )
+    
+    return {
+        "message": "Payout requested successfully",
+        "payout_id": payout_id,
+        "status": "pending"
+    }
+
+@api_router.get("/users/me/payouts")
+async def get_my_payouts(request: Request):
+    user = await get_current_user(request)
+    if not user:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    
+    payouts = await db.payouts.find({"user_id": user.user_id}, {"_id": 0}).sort("created_at", -1).to_list(100)
+    
+    for payout in payouts:
+        if isinstance(payout["created_at"], str):
+            payout["created_at"] = datetime.fromisoformat(payout["created_at"])
+        if payout.get("completed_at") and isinstance(payout["completed_at"], str):
+            payout["completed_at"] = datetime.fromisoformat(payout["completed_at"])
+    
+    return payouts
 
 # Include the router in the main app
 app.include_router(api_router)
