@@ -477,7 +477,7 @@ async def get_user(user_id: str):
     return User(**user_doc)
 
 @api_router.patch("/users/me")
-async def update_user(request: Request, category: Optional[str] = None, bio: Optional[str] = None):
+async def update_user(request: Request, category: Optional[str] = None, bio: Optional[str] = None, name: Optional[str] = None):
     user = await get_current_user(request)
     if not user:
         raise HTTPException(status_code=401, detail="Not authenticated")
@@ -489,6 +489,8 @@ async def update_user(request: Request, category: Optional[str] = None, bio: Opt
         update_data["category"] = category
     if bio is not None:
         update_data["bio"] = bio
+    if name:
+        update_data["name"] = name
     
     if update_data:
         await db.users.update_one(
@@ -497,6 +499,9 @@ async def update_user(request: Request, category: Optional[str] = None, bio: Opt
         )
     
     user_doc = await db.users.find_one({"user_id": user.user_id}, {"_id": 0})
+    # Remove password_hash from response
+    if "password_hash" in user_doc:
+        del user_doc["password_hash"]
     return User(**user_doc)
 
 @api_router.post("/users/me/profile-picture")
