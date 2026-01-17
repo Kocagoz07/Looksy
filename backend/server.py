@@ -147,6 +147,23 @@ class Payout(BaseModel):
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     completed_at: Optional[datetime] = None
 
+class CollaborationMessage(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    message_id: str
+    from_user_id: str
+    from_user_name: str
+    from_user_picture: Optional[str] = None
+    to_user_id: str
+    subject: str
+    message: str
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    read: bool = False
+
+class CollaborationRequest(BaseModel):
+    to_user_id: str
+    subject: str
+    message: str
+
 # Helper function to convert USD to EUR
 def usd_to_eur(usd_amount: float) -> float:
     rate = float(os.environ.get('USD_TO_EUR_RATE', '0.92'))
