@@ -114,6 +114,17 @@ class MagicLinkRequest(BaseModel):
     email: EmailStr
     category: str
 
+class EmailPasswordLogin(BaseModel):
+    email: EmailStr
+    password: str
+    category: str
+
+class EmailPasswordRegister(BaseModel):
+    email: EmailStr
+    password: str
+    name: str
+    category: str
+
 class PostCreate(BaseModel):
     caption: Optional[str] = None
     music: Optional[str] = None
