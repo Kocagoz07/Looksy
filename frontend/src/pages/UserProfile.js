@@ -149,6 +149,32 @@ export default function UserProfile() {
     }
   };
 
+  const handleToggleFollow = async () => {
+    setFollowLoading(true);
+    try {
+      const response = await axios.post(
+        `${BACKEND_URL}/api/users/${userId}/follow`,
+        {},
+        { withCredentials: true }
+      );
+      setIsFollowing(response.data.following);
+      toast.success(response.data.following ? "Following!" : "Unfollowed");
+      
+      // Update follower count
+      setUser({
+        ...user,
+        followers: response.data.following 
+          ? [...(user.followers || []), currentUser.user_id]
+          : (user.followers || []).filter(id => id !== currentUser.user_id)
+      });
+    } catch (err) {
+      console.error("Error toggling follow:", err);
+      toast.error("Failed to update follow status");
+    } finally {
+      setFollowLoading(false);
+    }
+  };
+
   if (loading) {
     return (
       <div className="min-h-screen bg-white flex items-center justify-center">
