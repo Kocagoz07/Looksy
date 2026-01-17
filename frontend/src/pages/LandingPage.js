@@ -137,7 +137,7 @@ export default function LandingPage() {
           
           {/* Looksy Text */}
           <div>
-            <h1 className="font-playfair text-6xl font-normal text-white tracking-wide" style={{ fontStyle: 'italic' }}>
+            <h1 className="font-italiana text-6xl text-white tracking-wide">
               Looksy
             </h1>
           </div>
@@ -173,7 +173,7 @@ export default function LandingPage() {
           
           {/* Looksy Text */}
           <div>
-            <h1 className="font-playfair text-6xl font-normal text-white tracking-wide" style={{ fontStyle: 'italic' }}>
+            <h1 className="font-italiana text-6xl text-white tracking-wide">
               Looksy
             </h1>
           </div>
