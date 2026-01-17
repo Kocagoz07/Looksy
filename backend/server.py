@@ -43,6 +43,7 @@ class User(BaseModel):
     user_id: str
     email: str
     name: str
+    password_hash: Optional[str] = None  # For email/password auth
     picture: Optional[str] = None
     bio: Optional[str] = None
     category: Optional[str] = None  # "men", "women", or None
