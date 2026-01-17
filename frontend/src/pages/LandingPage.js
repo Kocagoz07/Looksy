@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { Mail, Lock, Eye, EyeOff, ArrowRight } from "lucide-react";
+import { Mail, ArrowRight, Spade, Heart } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import axios from "axios";
@@ -12,13 +12,10 @@ export default function LandingPage() {
   const navigate = useNavigate();
   const [selectedGender, setSelectedGender] = useState(null);
   const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [emailSent, setEmailSent] = useState(false);
   const [magicLink, setMagicLink] = useState("");
   const [emailError, setEmailError] = useState("");
-  const [passwordError, setPasswordError] = useState("");
 
   useEffect(() => {
     const checkAuth = async () => {
@@ -44,16 +41,6 @@ export default function LandingPage() {
       setEmailError("Please enter a valid email");
     } else {
       setEmailError("");
-    }
-  };
-
-  const handlePasswordChange = (e) => {
-    const value = e.target.value;
-    setPassword(value);
-    if (value && value.length < 6) {
-      setPasswordError("Password must be at least 6 characters");
-    } else {
-      setPasswordError("");
     }
   };
 
@@ -134,7 +121,7 @@ export default function LandingPage() {
 
   return (
     <div className="min-h-screen bg-white flex">
-      {/* Left Side - Men */}
+      {/* Left Side - Men (Spade) */}
       <div 
         className={`w-1/2 min-h-screen flex flex-col items-center justify-center p-12 transition-all duration-500 cursor-pointer relative overflow-hidden ${
           selectedGender === 'men' ? 'bg-black' : 'bg-gray-900'
@@ -142,16 +129,14 @@ export default function LandingPage() {
         onClick={() => setSelectedGender('men')}
         data-testid="gender-men-section"
       >
-        <div className="relative z-10 text-center space-y-6">
-          {/* Simple M Icon */}
+        <div className="relative z-10 text-center space-y-8">
+          {/* Spade Icon */}
           <div className={`transition-all duration-300 ${selectedGender === 'men' ? 'scale-100 opacity-100' : 'scale-90 opacity-60'}`}>
-            <div className="text-white font-playfair text-8xl font-light tracking-wider">M</div>
+            <div className="w-32 h-32 flex items-center justify-center mx-auto">
+              <Spade className="w-24 h-24 text-white fill-white" />
+            </div>
           </div>
           
-          <div className={`transition-all duration-300 ${selectedGender === 'men' ? 'opacity-100' : 'opacity-50'}`}>
-            <p className="font-manrope text-white text-sm tracking-widest uppercase">Men's Fashion</p>
-          </div>
-
           {selectedGender === 'men' && (
             <div className="absolute top-6 right-6 animate-fade-in">
               <div className="w-2 h-2 rounded-full bg-white"></div>
@@ -160,7 +145,7 @@ export default function LandingPage() {
         </div>
       </div>
 
-      {/* Right Side - Women */}
+      {/* Right Side - Women (Ace of Hearts) */}
       <div 
         className={`w-1/2 min-h-screen flex flex-col items-center justify-center p-12 transition-all duration-500 cursor-pointer relative overflow-hidden ${
           selectedGender === 'women' ? 'bg-[#2C0A0A]' : 'bg-[#3D1010]'
@@ -168,14 +153,12 @@ export default function LandingPage() {
         onClick={() => setSelectedGender('women')}
         data-testid="gender-women-section"
       >
-        <div className="relative z-10 text-center space-y-6">
-          {/* Simple W Icon */}
+        <div className="relative z-10 text-center space-y-8">
+          {/* Heart Icon */}
           <div className={`transition-all duration-300 ${selectedGender === 'women' ? 'scale-100 opacity-100' : 'scale-90 opacity-60'}`}>
-            <div className="text-white font-playfair text-8xl font-light tracking-wider">W</div>
-          </div>
-          
-          <div className={`transition-all duration-300 ${selectedGender === 'women' ? 'opacity-100' : 'opacity-50'}`}>
-            <p className="font-manrope text-white text-sm tracking-widest uppercase">Women's Fashion</p>
+            <div className="w-32 h-32 flex items-center justify-center mx-auto">
+              <Heart className="w-24 h-24 text-white fill-white" />
+            </div>
           </div>
 
           {selectedGender === 'women' && (
@@ -191,11 +174,14 @@ export default function LandingPage() {
         <div className="fixed inset-0 flex items-center justify-center pointer-events-none z-50">
           <div className="pointer-events-auto bg-white rounded-3xl shadow-2xl p-10 max-w-md w-full mx-4 animate-fade-in">
             {/* Logo */}
-            <div className="text-center mb-8">
-              <h1 className="font-playfair text-4xl font-light tracking-wide text-black mb-2">
+            <div className="text-center mb-8 space-y-2">
+              <h1 className="font-playfair text-5xl font-bold tracking-wide text-black">
                 Looksy
               </h1>
-              <div className="w-12 h-0.5 bg-black mx-auto"></div>
+              <p className="font-manrope text-sm tracking-widest uppercase text-gray-600">
+                Fashion Redefined
+              </p>
+              <div className="w-16 h-0.5 bg-black mx-auto mt-4"></div>
             </div>
 
             <form onSubmit={handleSendMagicLink} className="space-y-5">
