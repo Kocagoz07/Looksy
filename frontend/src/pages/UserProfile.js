@@ -52,6 +52,17 @@ export default function UserProfile() {
       setCurrentUser(currentUserRes.data);
       setBioText(userRes.data.bio || "");
       setPosts(postsRes.data);
+      
+      // Check if following
+      if (currentUserRes.data.following) {
+        setIsFollowing(currentUserRes.data.following.includes(userId));
+      }
+      
+      // Fetch collaborations if own profile
+      if (currentUserRes.data.user_id === userId) {
+        const collabRes = await axios.get(`${BACKEND_URL}/api/collaborations/inbox`, { withCredentials: true });
+        setCollaborations(collabRes.data);
+      }
     } catch (err) {
       console.error("Error fetching profile:", err);
       toast.error("Failed to load profile");
