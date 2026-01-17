@@ -345,37 +345,64 @@ export default function UserProfile() {
                   </Button>
                 </>
               ) : (
-                /* Collaboration Box for Other Users */
-                <div 
-                  className="cursor-pointer group"
-                  onClick={() => setCollaborateOpen(true)}
-                  data-testid="collaborate-box"
-                >
-                  <div 
-                    className="px-8 py-4 rounded-xl transition-all hover:shadow-lg relative overflow-hidden"
-                    style={{ backgroundColor: '#013220' }}
+                <>
+                  {/* Follow Button */}
+                  <Button
+                    data-testid="follow-btn"
+                    onClick={handleToggleFollow}
+                    disabled={followLoading}
+                    className="px-6 py-3 rounded-full font-manrope font-semibold flex items-center gap-2 transition-all"
+                    style={{ 
+                      backgroundColor: isFollowing ? 'transparent' : textColor,
+                      color: isFollowing ? textColor : bgColor,
+                      border: isFollowing ? `2px solid ${textColor}` : 'none'
+                    }}
                   >
-                    {/* Decorative Background Pattern */}
-                    <div className="absolute inset-0 opacity-5">
-                      <div className="absolute top-0 right-0 w-20 h-20 bg-white rounded-full -translate-y-1/2 translate-x-1/2"></div>
-                      <div className="absolute bottom-0 left-0 w-16 h-16 bg-white rounded-full translate-y-1/2 -translate-x-1/2"></div>
-                    </div>
-                    
-                    <div className="relative z-10">
-                      <div className="flex items-center gap-3 mb-2">
-                        <MessageSquare className="w-6 h-6 text-white" />
-                        <h3 className="font-italiana text-xl text-white">Collaborate</h3>
+                    {isFollowing ? (
+                      <>
+                        <UserCheck className="w-4 h-4" />
+                        Following
+                      </>
+                    ) : (
+                      <>
+                        <UserPlus className="w-4 h-4" />
+                        Follow
+                      </>
+                    )}
+                  </Button>
+                  
+                  {/* Collaboration Box for Other Users */}
+                  <div 
+                    className="cursor-pointer group"
+                    onClick={() => setCollaborateOpen(true)}
+                    data-testid="collaborate-box"
+                  >
+                    <div 
+                      className="px-8 py-4 rounded-xl transition-all hover:shadow-lg relative overflow-hidden"
+                      style={{ backgroundColor: '#013220' }}
+                    >
+                      {/* Decorative Background Pattern */}
+                      <div className="absolute inset-0 opacity-5">
+                        <div className="absolute top-0 right-0 w-20 h-20 bg-white rounded-full -translate-y-1/2 translate-x-1/2"></div>
+                        <div className="absolute bottom-0 left-0 w-16 h-16 bg-white rounded-full translate-y-1/2 -translate-x-1/2"></div>
                       </div>
-                      <p className="font-manrope text-sm text-white opacity-90 mb-3">
-                        Partner with {user.name.split(' ')[0]} for your next project
-                      </p>
-                      <div className="flex items-center gap-2 text-white opacity-75 group-hover:opacity-100 transition-opacity">
-                        <span className="font-manrope text-xs font-semibold">Send Message</span>
-                        <Send className="w-4 h-4" />
+                      
+                      <div className="relative z-10">
+                        <div className="flex items-center gap-3 mb-2">
+                          <MessageSquare className="w-6 h-6 text-white" />
+                          <h3 className="font-italiana text-xl text-white">Collaborate</h3>
+                        </div>
+                        <p className="font-manrope text-sm text-white opacity-90 mb-3">
+                          Partner with {user.name.split(' ')[0]} for your next project
+                        </p>
+                        <div className="flex items-center gap-2 text-white opacity-75 group-hover:opacity-100 transition-opacity">
+                          <span className="font-manrope text-xs font-semibold">Send Message</span>
+                          <Send className="w-4 h-4" />
+                        </div>
                       </div>
                     </div>
                   </div>
-                </div>
+                </>
               )}
             </div>
           </div>
