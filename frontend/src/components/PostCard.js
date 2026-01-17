@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Heart, MessageCircle, Star, Trash2 } from "lucide-react";
+import { Heart, MessageCircle, Star, Trash2, Bookmark } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import DeleteConfirmDialog from "@/components/DeleteConfirmDialog";
 import axios from "axios";
@@ -13,6 +13,7 @@ export default function PostCard({ post, currentUserId, onDelete }) {
   const [likes, setLikes] = useState(post.likes_count);
   const [isLiked, setIsLiked] = useState(post.liked_by?.includes(currentUserId));
   const [isStarred, setIsStarred] = useState(post.starred_by?.includes(currentUserId));
+  const [isFavorited, setIsFavorited] = useState(post.is_favorited || false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [deleting, setDeleting] = useState(false);
 
@@ -43,10 +44,26 @@ export default function PostCard({ post, currentUserId, onDelete }) {
         { withCredentials: true }
       );
       setIsStarred(response.data.starred);
-      toast.success(response.data.starred ? "Post saved!" : "Post unsaved");
+      toast.success(response.data.starred ? "Star given!" : "Star removed");
     } catch (err) {
       console.error("Error starring post:", err);
-      toast.error("Failed to save post");
+      toast.error("Failed to star post");
+    }
+  };
+
+  const handleFavorite = async (e) => {
+    e.stopPropagation();
+    try {
+      const response = await axios.post(
+        `${BACKEND_URL}/api/posts/${post.post_id}/favorite`,
+        {},
+        { withCredentials: true }
+      );
+      setIsFavorited(response.data.is_favorited);
+      toast.success(response.data.is_favorited ? "Added to favorites!" : "Removed from favorites");
+    } catch (err) {
+      console.error("Error favoriting post:", err);
+      toast.error("Failed to update favorites");
     }
   };
 
@@ -130,9 +147,18 @@ export default function PostCard({ post, currentUserId, onDelete }) {
               data-testid={`star-btn-${post.post_id}`}
               onClick={handleStar}
               className="flex items-center gap-1 hover:scale-110 transition-transform"
-              title={isStarred ? "Unsave" : "Save"}
+              title={isStarred ? "Remove star" : "Give star"}
             >
               <Star className={`w-5 h-5 ${isStarred ? 'fill-current text-yellow-500' : ''}`} />
+            </button>
+            
+            <button
+              data-testid={`favorite-btn-${post.post_id}`}
+              onClick={handleFavorite}
+              className="flex items-center gap-1 hover:scale-110 transition-transform"
+              title={isFavorited ? "Remove from favorites" : "Add to favorites"}
+            >
+              <Bookmark className={`w-5 h-5 ${isFavorited ? 'fill-current text-blue-500' : ''}`} />
             </button>
             
             {isOwner && (
