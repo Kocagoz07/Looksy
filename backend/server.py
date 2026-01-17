@@ -335,21 +335,46 @@ async def get_user(user_id: str):
     return User(**user_doc)
 
 @api_router.patch("/users/me")
-async def update_user(request: Request, category: Optional[str] = None):
+async def update_user(request: Request, category: Optional[str] = None, bio: Optional[str] = None):
     user = await get_current_user(request)
     if not user:
         raise HTTPException(status_code=401, detail="Not authenticated")
     
+    update_data = {}
     if category and category not in ["men", "women"]:
         raise HTTPException(status_code=400, detail="Invalid category")
+    if category:
+        update_data["category"] = category
+    if bio is not None:
+        update_data["bio"] = bio
     
-    await db.users.update_one(
-        {"user_id": user.user_id},
-        {"$set": {"category": category}}
-    )
+    if update_data:
+        await db.users.update_one(
+            {"user_id": user.user_id},
+            {"$set": update_data}
+        )
     
     user_doc = await db.users.find_one({"user_id": user.user_id}, {"_id": 0})
     return User(**user_doc)
+
+@api_router.post("/users/me/profile-picture")
+async def update_profile_picture(request: Request, file: UploadFile = File(...)):
+    user = await get_current_user(request)
+    if not user:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    
+    # Upload image to GridFS
+    contents = await file.read()
+    file_id = fs.put(contents, filename=file.filename, content_type=file.content_type)
+    
+    # Update user picture
+    picture_url = f"/api/images/{str(file_id)}"
+    await db.users.update_one(
+        {"user_id": user.user_id},
+        {"$set": {"picture": picture_url}}
+    )
+    
+    return {"picture": picture_url}
 
 # Image upload to GridFS
 @api_router.post("/upload-image")
