@@ -8,6 +8,9 @@ import UploadPost from "@/pages/UploadPost";
 import PostDetail from "@/pages/PostDetail";
 import UserProfile from "@/pages/UserProfile";
 import PayoutsPage from "@/pages/PayoutsPage";
+import FavoritesPage from "@/pages/FavoritesPage";
+import CelebrityPage from "@/pages/CelebrityPage";
+import RewardsPage from "@/pages/RewardsPage";
 import ProtectedRoute from "@/components/ProtectedRoute";
 import { Toaster } from "@/components/ui/sonner";
 
@@ -26,6 +29,9 @@ function AppContent() {
       <Route path="/post/:postId" element={<ProtectedRoute><PostDetail /></ProtectedRoute>} />
       <Route path="/profile/:userId" element={<ProtectedRoute><UserProfile /></ProtectedRoute>} />
       <Route path="/payouts" element={<ProtectedRoute><PayoutsPage /></ProtectedRoute>} />
+      <Route path="/favorites" element={<ProtectedRoute><FavoritesPage /></ProtectedRoute>} />
+      <Route path="/celebrity" element={<CelebrityPage />} />
+      <Route path="/rewards" element={<ProtectedRoute><RewardsPage /></ProtectedRoute>} />
     </Routes>
   );
 }
