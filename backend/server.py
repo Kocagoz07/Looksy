@@ -193,12 +193,41 @@ class AIReplyRequest(BaseModel):
     from_user_name: str
     reply_tone: str = "professional"  # professional, friendly, brief
 
+# Payment Transaction Model
+class PaymentTransaction(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    transaction_id: str
+    user_id: str
+    session_id: str
+    amount: float
+    currency: str
+    payment_type: str  # "payout" or "topup"
+    payment_method: str  # "stripe" or "paypal"
+    payment_status: str  # "pending", "completed", "failed"
+    metadata: Optional[Dict[str, str]] = None
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    completed_at: Optional[datetime] = None
+
+# Stars to Payout Points conversion request
+class ConvertStarsRequest(BaseModel):
+    stars_to_convert: int
+
+# Stripe payout request
+class StripePayoutRequest(BaseModel):
+    amount_eur: float
+    origin_url: str
+
+# PayPal payout request
+class PayPalPayoutRequest(BaseModel):
+    amount_eur: float
+    paypal_email: str
+
 # Helper function to convert USD to EUR
 def usd_to_eur(usd_amount: float) -> float:
     rate = float(os.environ.get('USD_TO_EUR_RATE', '0.92'))
     return round(usd_amount * rate, 2)
 
-# Helper function to calculate earnings
+# Helper function to calculate earnings from likes
 def calculate_earnings(likes_count: int) -> float:
     if likes_count < 1000:
         return likes_count * 0.05
@@ -208,6 +237,37 @@ def calculate_earnings(likes_count: int) -> float:
         return 1000 * 0.05 + 2000 * 0.10 + (likes_count - 3000) * 0.20
     else:
         return 1000 * 0.05 + 2000 * 0.10 + 7000 * 0.20 + (likes_count - 10000) * 0.50
+
+# Helper function to calculate payout points from stars
+# 1-1000 stars: $0.0005 per star (0.05 cents)
+# 1000-5000 stars: $0.001 per star (0.10 cents)
+# 5000-10000 stars: $0.002 per star (0.20 cents)
+# Max 10,000 stars per post
+def calculate_payout_points(stars: int) -> float:
+    """Convert stars to payout points (USD value)"""
+    if stars <= 0:
+        return 0.0
+    
+    # Cap at 10,000 stars
+    stars = min(stars, 10000)
+    
+    points = 0.0
+    
+    # First 1000 stars: $0.0005 each (0.05 cents)
+    first_tier = min(stars, 1000)
+    points += first_tier * 0.0005
+    
+    # 1001-5000 stars: $0.001 each (0.10 cents)
+    if stars > 1000:
+        second_tier = min(stars - 1000, 4000)
+        points += second_tier * 0.001
+    
+    # 5001-10000 stars: $0.002 each (0.20 cents)
+    if stars > 5000:
+        third_tier = min(stars - 5000, 5000)
+        points += third_tier * 0.002
+    
+    return round(points, 4)
 
 # Auth helper
 async def get_current_user(request: Request) -> Optional[User]:
