@@ -278,9 +278,9 @@ async def register_with_password(request: EmailPasswordRegister, response: Respo
         max_age=7 * 24 * 60 * 60
     )
     
-    # Return user without password_hash
-    user_dict_response = {k: v for k, v in user_dict.items() if k != 'password_hash'}
-    return user_dict_response
+    # Fetch user from DB without _id and password_hash
+    user_doc = await db.users.find_one({"user_id": user_id}, {"_id": 0, "password_hash": 0})
+    return user_doc
 
 @api_router.post("/auth/login")
 async def login_with_password(request: EmailPasswordLogin, response: Response):
