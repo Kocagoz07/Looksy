@@ -267,7 +267,7 @@ export default function UserProfile() {
             
             {/* Action Boxes */}
             <div className="flex flex-wrap items-center justify-center sm:justify-start gap-3">
-              {isOwnProfile && (
+              {isOwnProfile ? (
                 <>
                   <div 
                     className="px-6 py-3 rounded-lg border border-white border-opacity-20 cursor-pointer hover:border-opacity-40 transition-all" 
@@ -303,18 +303,38 @@ export default function UserProfile() {
                     Payouts
                   </Button>
                 </>
-              )}
-              
-              {!isOwnProfile && (
-                <Button
-                  data-testid="collaborate-btn"
+              ) : (
+                /* Collaboration Box for Other Users */
+                <div 
+                  className="cursor-pointer group"
                   onClick={() => setCollaborateOpen(true)}
-                  className="px-6 py-3 rounded-lg font-manrope font-semibold flex items-center gap-2"
-                  style={{ backgroundColor: '#013220', color: '#FFFFFF' }}
+                  data-testid="collaborate-box"
                 >
-                  <Briefcase className="w-4 h-4" />
-                  Collaborate
-                </Button>
+                  <div 
+                    className="px-8 py-4 rounded-xl transition-all hover:shadow-lg relative overflow-hidden"
+                    style={{ backgroundColor: '#013220' }}
+                  >
+                    {/* Decorative Background Pattern */}
+                    <div className="absolute inset-0 opacity-5">
+                      <div className="absolute top-0 right-0 w-20 h-20 bg-white rounded-full -translate-y-1/2 translate-x-1/2"></div>
+                      <div className="absolute bottom-0 left-0 w-16 h-16 bg-white rounded-full translate-y-1/2 -translate-x-1/2"></div>
+                    </div>
+                    
+                    <div className="relative z-10">
+                      <div className="flex items-center gap-3 mb-2">
+                        <MessageSquare className="w-6 h-6 text-white" />
+                        <h3 className="font-italiana text-xl text-white">Collaborate</h3>
+                      </div>
+                      <p className="font-manrope text-sm text-white opacity-90 mb-3">
+                        Partner with {user.name.split(' ')[0]} for your next project
+                      </p>
+                      <div className="flex items-center gap-2 text-white opacity-75 group-hover:opacity-100 transition-opacity">
+                        <span className="font-manrope text-xs font-semibold">Send Message</span>
+                        <Send className="w-4 h-4" />
+                      </div>
+                    </div>
+                  </div>
+                </div>
               )}
             </div>
           </div>
