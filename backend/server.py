@@ -768,6 +768,66 @@ async def get_my_payouts(request: Request):
     
     return payouts
 
+# Collaboration endpoints
+@api_router.post("/collaborations/send")
+async def send_collaboration_request(request: Request, collab_req: CollaborationRequest):
+    user = await get_current_user(request)
+    if not user:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    
+    # Check if target user exists
+    to_user = await db.users.find_one({"user_id": collab_req.to_user_id}, {"_id": 0})
+    if not to_user:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    # Create collaboration message
+    message_id = f"msg_{uuid.uuid4().hex[:12]}"
+    collab_message = CollaborationMessage(
+        message_id=message_id,
+        from_user_id=user.user_id,
+        from_user_name=user.name,
+        from_user_picture=user.picture,
+        to_user_id=collab_req.to_user_id,
+        subject=collab_req.subject,
+        message=collab_req.message
+    )
+    
+    message_dict = collab_message.model_dump()
+    message_dict["created_at"] = message_dict["created_at"].isoformat()
+    await db.collaboration_messages.insert_one(message_dict)
+    
+    return {"message": "Collaboration request sent successfully", "message_id": message_id}
+
+@api_router.get("/collaborations/inbox")
+async def get_collaboration_inbox(request: Request):
+    user = await get_current_user(request)
+    if not user:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    
+    messages = await db.collaboration_messages.find(
+        {"to_user_id": user.user_id},
+        {"_id": 0}
+    ).sort("created_at", -1).to_list(100)
+    
+    for msg in messages:
+        if isinstance(msg["created_at"], str):
+            msg["created_at"] = datetime.fromisoformat(msg["created_at"])
+    
+    return messages
+
+@api_router.patch("/collaborations/{message_id}/read")
+async def mark_message_read(request: Request, message_id: str):
+    user = await get_current_user(request)
+    if not user:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    
+    await db.collaboration_messages.update_one(
+        {"message_id": message_id, "to_user_id": user.user_id},
+        {"$set": {"read": True}}
+    )
+    
+    return {"message": "Message marked as read"}
+
 # Include the router in the main app
 app.include_router(api_router)
 
