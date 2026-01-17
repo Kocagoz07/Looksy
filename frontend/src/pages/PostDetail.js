@@ -18,6 +18,7 @@ export default function PostDetail() {
   const [newComment, setNewComment] = useState("");
   const [loading, setLoading] = useState(true);
   const [isLiked, setIsLiked] = useState(false);
+  const [isStarred, setIsStarred] = useState(false);
 
   useEffect(() => {
     fetchData();
@@ -33,6 +34,7 @@ export default function PostDetail() {
       setPost(postRes.data);
       setCurrentUser(currentUserRes.data);
       setIsLiked(postRes.data.liked_by?.includes(currentUserRes.data.user_id));
+      setIsStarred(postRes.data.starred_by?.includes(currentUserRes.data.user_id));
       
       const userRes = await axios.get(`${BACKEND_URL}/api/users/${postRes.data.user_id}`, { withCredentials: true });
       setUser(userRes.data);
@@ -59,6 +61,21 @@ export default function PostDetail() {
     } catch (err) {
       console.error("Error liking post:", err);
       toast.error("Failed to like post");
+    }
+  };
+
+  const handleStar = async () => {
+    try {
+      const response = await axios.post(
+        `${BACKEND_URL}/api/posts/${postId}/star`,
+        {},
+        { withCredentials: true }
+      );
+      setIsStarred(response.data.starred);
+      toast.success(response.data.starred ? "Post saved!" : "Post unsaved");
+    } catch (err) {
+      console.error("Error starring post:", err);
+      toast.error("Failed to save post");
     }
   };
 
