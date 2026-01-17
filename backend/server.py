@@ -574,7 +574,7 @@ async def get_posts(category: Optional[str] = None, limit: int = 50):
     query = {"is_deleted": {"$ne": True}}
     if category:
         # Get users in this category
-        users = await db.users.find({" category": category}, {"user_id": 1, "_id": 0}).to_list(1000)
+        users = await db.users.find({"category": category}, {"user_id": 1, "_id": 0}).to_list(1000)
         user_ids = [u["user_id"] for u in users]
         query["user_id"] = {"$in": user_ids}
     
