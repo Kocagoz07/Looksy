@@ -13,6 +13,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import PostCard from "@/components/PostCard";
+import CollaborationHub from "@/components/CollaborationHub";
 import axios from "axios";
 import { toast } from "sonner";
 
@@ -408,78 +409,14 @@ export default function UserProfile() {
           </div>
         </div>
 
-        {/* Collaborations Section - Own Profile Only */}
-        {isOwnProfile && collaborations.length > 0 && (
-          <div className="mb-8">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="font-italiana text-2xl">Collaborations</h3>
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => setShowCollaborations(!showCollaborations)}
-                style={{ color: textColor }}
-              >
-                {showCollaborations ? 'Hide' : `Show (${collaborations.length})`}
-              </Button>
-            </div>
-            
-            {showCollaborations && (
-              <div className="space-y-3">
-                {collaborations.map((collab) => (
-                  <div 
-                    key={collab.message_id}
-                    className="p-5 rounded-xl border transition-all hover:shadow-md"
-                    style={{ 
-                      backgroundColor: collab.read ? 'transparent' : 'rgba(255,255,255,0.05)',
-                      borderColor: textColor,
-                      borderWidth: '1px',
-                      opacity: collab.read ? 0.7 : 1
-                    }}
-                  >
-                    <div className="flex items-start gap-4">
-                      {/* User Picture */}
-                      {collab.from_user_picture ? (
-                        <img 
-                          src={collab.from_user_picture.startsWith('http') ? collab.from_user_picture : BACKEND_URL + collab.from_user_picture} 
-                          alt={collab.from_user_name} 
-                          className="w-12 h-12 rounded-full object-cover" 
-                        />
-                      ) : (
-                        <div className="w-12 h-12 rounded-full bg-gray-200 flex items-center justify-center">
-                          <span className="font-italiana text-lg text-black">{collab.from_user_name[0]}</span>
-                        </div>
-                      )}
-                      
-                      {/* Message Content */}
-                      <div className="flex-1">
-                        <div className="flex items-center gap-2 mb-1">
-                          <h4 className="font-manrope font-semibold" style={{ color: textColor }}>
-                            {collab.from_user_name}
-                          </h4>
-                          {!collab.read && (
-                            <span className="px-2 py-0.5 bg-blue-500 text-white text-xs rounded-full font-manrope">
-                              New
-                            </span>
-                          )}
-                        </div>
-                        <p className="font-manrope text-sm font-semibold mb-2 opacity-90" style={{ color: textColor }}>
-                          {collab.subject}
-                        </p>
-                        <p className="font-manrope text-sm leading-relaxed opacity-80" style={{ color: textColor }}>
-                          {collab.message}
-                        </p>
-                        <p className="font-manrope text-xs opacity-50 mt-3" style={{ color: textColor }}>
-                          {new Date(collab.created_at).toLocaleDateString()} at {new Date(collab.created_at).toLocaleTimeString()}
-                        </p>
-                      </div>
-                      
-                      {/* Action Icon */}
-                      <Mail className="w-5 h-5 opacity-50" style={{ color: textColor }} />
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
+        {/* AI-Powered Collaboration Hub - Own Profile Only */}
+        {isOwnProfile && (
+          <div className="mb-8" data-testid="collaboration-hub-section">
+            <CollaborationHub 
+              userId={userId} 
+              textColor={textColor} 
+              bgColor={bgColor}
+            />
           </div>
         )}
 
