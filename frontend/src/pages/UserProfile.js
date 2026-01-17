@@ -31,6 +31,10 @@ export default function UserProfile() {
   const [collabSubject, setCollabSubject] = useState("");
   const [collabMessage, setCollabMessage] = useState("");
   const [uploadingPicture, setUploadingPicture] = useState(false);
+  const [collaborations, setCollaborations] = useState([]);
+  const [showCollaborations, setShowCollaborations] = useState(false);
+  const [isFollowing, setIsFollowing] = useState(false);
+  const [followLoading, setFollowLoading] = useState(false);
 
   useEffect(() => {
     fetchData();
