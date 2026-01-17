@@ -94,7 +94,41 @@ export default function Dashboard({ category = null }) {
             Looksy
           </h1>
           
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2 sm:gap-3">
+            {/* Quick Links */}
+            <Button
+              data-testid="favorites-link"
+              onClick={() => navigate("/favorites")}
+              variant="ghost"
+              size="icon"
+              className="rounded-full"
+              title="My Favorites"
+            >
+              <Bookmark className="w-4 h-4" />
+            </Button>
+            
+            <Button
+              data-testid="celebrity-link"
+              onClick={() => navigate("/celebrity")}
+              variant="ghost"
+              size="icon"
+              className="rounded-full"
+              title="Celebrity Posts"
+            >
+              <Crown className="w-4 h-4" />
+            </Button>
+            
+            <Button
+              data-testid="rewards-link"
+              onClick={() => navigate("/rewards")}
+              variant="ghost"
+              size="icon"
+              className="rounded-full"
+              title="Rewards & Payouts"
+            >
+              <Wallet className="w-4 h-4" />
+            </Button>
+            
             <Button
               data-testid="upload-btn"
               onClick={() => navigate("/upload")}
