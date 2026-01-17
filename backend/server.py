@@ -1011,6 +1011,203 @@ async def mark_message_read(request: Request, message_id: str):
     
     return {"message": "Message marked as read"}
 
+# AI-powered collaboration analysis endpoints
+@api_router.post("/collaborations/ai/analyze")
+async def analyze_collaboration(request: Request, analysis_req: AIAnalysisRequest):
+    """AI-powered analysis of collaboration request - generates summary and key insights"""
+    user = await get_current_user(request)
+    if not user:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    
+    api_key = os.environ.get('EMERGENT_LLM_KEY')
+    if not api_key:
+        raise HTTPException(status_code=500, detail="AI service not configured")
+    
+    try:
+        chat = LlmChat(
+            api_key=api_key,
+            session_id=f"collab_analyze_{user.user_id}_{uuid.uuid4().hex[:8]}",
+            system_message="""You are a professional collaboration assistant for Looksy, a fashion social media platform.
+Analyze collaboration requests and provide concise, actionable insights.
+Keep responses brief and professional. Focus on the key points."""
+        ).with_model("openai", "gpt-4o-mini")
+        
+        prompt = f"""Analyze this collaboration request and provide:
+1. A brief summary (1-2 sentences)
+2. Request type (Brand Partnership, Influencer Collab, Editorial, Photo Shoot, or General)
+3. Priority level (High/Medium/Low) based on content
+4. Key action items (2-3 bullet points)
+
+From: {analysis_req.from_user_name}
+Subject: {analysis_req.subject}
+Message: {analysis_req.message}
+
+Respond in JSON format:
+{{"summary": "...", "request_type": "...", "priority": "...", "action_items": ["...", "..."]}}"""
+
+        user_message = UserMessage(text=prompt)
+        response = await chat.send_message(user_message)
+        
+        # Parse the JSON response
+        import json
+        try:
+            # Try to extract JSON from the response
+            response_text = response.strip()
+            if response_text.startswith("```"):
+                response_text = response_text.split("```")[1]
+                if response_text.startswith("json"):
+                    response_text = response_text[4:]
+            result = json.loads(response_text)
+        except:
+            result = {
+                "summary": response[:200] if len(response) > 200 else response,
+                "request_type": "General",
+                "priority": "Medium",
+                "action_items": ["Review the collaboration request", "Consider your availability"]
+            }
+        
+        return result
+        
+    except Exception as e:
+        logger.error(f"AI analysis error: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"AI analysis failed: {str(e)}")
+
+@api_router.post("/collaborations/ai/suggest-reply")
+async def suggest_reply(request: Request, reply_req: AIReplyRequest):
+    """AI-powered reply suggestion for collaboration requests"""
+    user = await get_current_user(request)
+    if not user:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    
+    api_key = os.environ.get('EMERGENT_LLM_KEY')
+    if not api_key:
+        raise HTTPException(status_code=500, detail="AI service not configured")
+    
+    tone_instructions = {
+        "professional": "formal and businesslike",
+        "friendly": "warm and approachable while still professional",
+        "brief": "short and to the point"
+    }
+    
+    try:
+        chat = LlmChat(
+            api_key=api_key,
+            session_id=f"collab_reply_{user.user_id}_{uuid.uuid4().hex[:8]}",
+            system_message=f"""You are a collaboration assistant for {user.name}, a fashion content creator on Looksy.
+Generate reply suggestions that are {tone_instructions.get(reply_req.reply_tone, 'professional')}.
+Keep replies concise and actionable."""
+        ).with_model("openai", "gpt-4o-mini")
+        
+        prompt = f"""Generate 3 different reply options for this collaboration request.
+The replies should be {tone_instructions.get(reply_req.reply_tone, 'professional')}.
+
+Original Request:
+From: {reply_req.from_user_name}
+Subject: {reply_req.subject}
+Message: {reply_req.message}
+
+Provide 3 replies in JSON format:
+{{"replies": [
+    {{"type": "accept", "text": "..."}},
+    {{"type": "interested", "text": "..."}},
+    {{"type": "decline", "text": "..."}}
+]}}"""
+
+        user_message = UserMessage(text=prompt)
+        response = await chat.send_message(user_message)
+        
+        # Parse the JSON response
+        import json
+        try:
+            response_text = response.strip()
+            if response_text.startswith("```"):
+                response_text = response_text.split("```")[1]
+                if response_text.startswith("json"):
+                    response_text = response_text[4:]
+            result = json.loads(response_text)
+        except:
+            result = {
+                "replies": [
+                    {"type": "accept", "text": f"Hi {reply_req.from_user_name}! Thank you for reaching out. I'd love to collaborate with you on this project. Let's discuss the details further."},
+                    {"type": "interested", "text": f"Hi {reply_req.from_user_name}, thank you for your interest in collaborating. Could you share more details about the timeline and expectations?"},
+                    {"type": "decline", "text": f"Hi {reply_req.from_user_name}, thank you for thinking of me for this opportunity. Unfortunately, I'm unable to take on new collaborations at this time."}
+                ]
+            }
+        
+        return result
+        
+    except Exception as e:
+        logger.error(f"AI reply suggestion error: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"AI reply suggestion failed: {str(e)}")
+
+@api_router.post("/collaborations/ai/batch-analyze")
+async def batch_analyze_collaborations(request: Request):
+    """Analyze all unread collaboration requests for a user"""
+    user = await get_current_user(request)
+    if not user:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    
+    # Get unread messages
+    messages = await db.collaboration_messages.find(
+        {"to_user_id": user.user_id, "read": False},
+        {"_id": 0}
+    ).to_list(10)  # Limit to 10 for performance
+    
+    if not messages:
+        return {"analyses": [], "summary": "No unread collaboration requests"}
+    
+    api_key = os.environ.get('EMERGENT_LLM_KEY')
+    if not api_key:
+        raise HTTPException(status_code=500, detail="AI service not configured")
+    
+    try:
+        chat = LlmChat(
+            api_key=api_key,
+            session_id=f"collab_batch_{user.user_id}_{uuid.uuid4().hex[:8]}",
+            system_message="""You are a collaboration assistant. Provide brief summaries and prioritization."""
+        ).with_model("openai", "gpt-4o-mini")
+        
+        # Create a summary of all messages
+        messages_text = "\n\n".join([
+            f"Request {i+1}:\nFrom: {m['from_user_name']}\nSubject: {m['subject']}\nMessage: {m['message']}"
+            for i, m in enumerate(messages)
+        ])
+        
+        prompt = f"""Analyze these {len(messages)} collaboration requests and provide:
+1. An overall summary
+2. Which ones are high priority
+3. Recommended order to respond
+
+{messages_text}
+
+Respond in JSON:
+{{"overall_summary": "...", "high_priority_count": N, "recommendations": ["..."]}}"""
+
+        user_message = UserMessage(text=prompt)
+        response = await chat.send_message(user_message)
+        
+        import json
+        try:
+            response_text = response.strip()
+            if response_text.startswith("```"):
+                response_text = response_text.split("```")[1]
+                if response_text.startswith("json"):
+                    response_text = response_text[4:]
+            result = json.loads(response_text)
+        except:
+            result = {
+                "overall_summary": f"You have {len(messages)} unread collaboration requests to review.",
+                "high_priority_count": 0,
+                "recommendations": ["Review each request individually"]
+            }
+        
+        result["total_unread"] = len(messages)
+        return result
+        
+    except Exception as e:
+        logger.error(f"AI batch analysis error: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"AI batch analysis failed: {str(e)}")
+
 # Include the router in the main app
 app.include_router(api_router)
 
