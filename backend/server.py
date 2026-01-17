@@ -668,6 +668,47 @@ async def submit_kyc(request: Request, kyc_data: KYCSubmission):
     
     return {"message": "KYC documents submitted successfully", "verified": True}
 
+@api_router.post("/users/{user_id}/follow")
+async def toggle_follow(request: Request, user_id: str):
+    user = await get_current_user(request)
+    if not user:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    
+    if user.user_id == user_id:
+        raise HTTPException(status_code=400, detail="Cannot follow yourself")
+    
+    # Check if target user exists
+    target_user = await db.users.find_one({"user_id": user_id}, {"_id": 0})
+    if not target_user:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    # Check if already following
+    current_user_doc = await db.users.find_one({"user_id": user.user_id}, {"_id": 0})
+    following_list = current_user_doc.get("following", [])
+    
+    if user_id in following_list:
+        # Unfollow
+        await db.users.update_one(
+            {"user_id": user.user_id},
+            {"$pull": {"following": user_id}}
+        )
+        await db.users.update_one(
+            {"user_id": user_id},
+            {"$pull": {"followers": user.user_id}}
+        )
+        return {"following": False}
+    else:
+        # Follow
+        await db.users.update_one(
+            {"user_id": user.user_id},
+            {"$addToSet": {"following": user_id}}
+        )
+        await db.users.update_one(
+            {"user_id": user_id},
+            {"$addToSet": {"followers": user.user_id}}
+        )
+        return {"following": True}
+
 @api_router.post("/users/me/payout-method")
 async def set_payout_method(request: Request, payout_setup: PayoutMethodSetup):
     user = await get_current_user(request)
