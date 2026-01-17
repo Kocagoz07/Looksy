@@ -40,15 +40,21 @@ class User(BaseModel):
     email: str
     name: str
     picture: Optional[str] = None
+    bio: Optional[str] = None
     category: Optional[str] = None  # "men", "women", or None
     earnings: float = 0.0
     earnings_eur: float = 0.0
+    stars: int = 0  # Stars earned from engagement
+    payout_points: float = 0.0  # Converted from stars
     kyc_verified: bool = False
     kyc_documents: Optional[dict] = None
     payout_method: Optional[str] = None  # "paypal" or "stripe"
     payout_email: Optional[str] = None
     stripe_account_id: Optional[str] = None
     starred_posts: List[str] = []
+    favorited_posts: List[str] = []
+    followers: List[str] = []  # List of user_ids
+    following: List[str] = []  # List of user_ids
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
 class ProductLink(BaseModel):
