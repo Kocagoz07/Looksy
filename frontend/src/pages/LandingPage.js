@@ -199,7 +199,7 @@ export default function LandingPage() {
           <div className="pointer-events-auto bg-white rounded-3xl shadow-2xl p-12 max-w-lg w-full mx-4 animate-fade-in">
             {/* Logo */}
             <div className="text-center mb-10 space-y-3">
-              <h1 className="font-playfair text-6xl font-normal tracking-wide text-black" style={{ fontStyle: 'italic' }}>
+              <h1 className="font-italiana text-6xl tracking-wide text-black">
                 Looksy
               </h1>
               <p className="font-manrope text-xs tracking-[0.3em] uppercase text-gray-500 font-light">
