@@ -11,7 +11,13 @@ import {
   Sparkles,
   Mail,
   User,
-  BarChart3
+  BarChart3,
+  Wand2,
+  Loader2,
+  ChevronDown,
+  ChevronUp,
+  Brain,
+  Zap
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -24,12 +30,19 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import axios from "axios";
 import { toast } from "sonner";
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 
-// AI-powered categorization
+// AI-powered categorization (local fallback)
 const categorizeRequest = (subject, message) => {
   const text = `${subject} ${message}`.toLowerCase();
   
@@ -48,12 +61,11 @@ const categorizeRequest = (subject, message) => {
   return { category: 'General', icon: '💼', color: 'bg-gray-100 text-gray-700' };
 };
 
-// AI-powered priority scoring
+// AI-powered priority scoring (local fallback)
 const calculatePriority = (subject, message, from_user_name) => {
   let score = 0;
   const text = `${subject} ${message} ${from_user_name}`.toLowerCase();
   
-  // High priority keywords
   if (text.includes('urgent') || text.includes('asap') || text.includes('important')) score += 3;
   if (text.includes('exclusive') || text.includes('limited')) score += 2;
   if (text.includes('brand') || text.includes('official')) score += 2;
@@ -72,6 +84,16 @@ export default function CollaborationHub({ userId, textColor = '#000000', bgColo
   const [searchQuery, setSearchQuery] = useState("");
   const [filterPriority, setFilterPriority] = useState("all");
   const [filterCategory, setFilterCategory] = useState("all");
+  
+  // AI Feature States
+  const [selectedCollab, setSelectedCollab] = useState(null);
+  const [aiAnalysis, setAiAnalysis] = useState(null);
+  const [aiReplies, setAiReplies] = useState(null);
+  const [aiLoading, setAiLoading] = useState(false);
+  const [showAiPanel, setShowAiPanel] = useState(false);
+  const [batchAnalysis, setBatchAnalysis] = useState(null);
+  const [batchLoading, setBatchLoading] = useState(false);
+  const [expandedCollab, setExpandedCollab] = useState(null);
 
   useEffect(() => {
     fetchCollaborations();
@@ -98,14 +120,12 @@ export default function CollaborationHub({ userId, textColor = '#000000', bgColo
   const applyFilters = () => {
     let filtered = [...collaborations];
 
-    // Tab filter
     if (activeTab === "unread") {
       filtered = filtered.filter(c => !c.read);
     } else if (activeTab === "read") {
       filtered = filtered.filter(c => c.read);
     }
 
-    // Search filter
     if (searchQuery) {
       filtered = filtered.filter(c => 
         c.from_user_name.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -114,7 +134,6 @@ export default function CollaborationHub({ userId, textColor = '#000000', bgColo
       );
     }
 
-    // Priority filter
     if (filterPriority !== "all") {
       filtered = filtered.filter(c => {
         const priority = calculatePriority(c.subject, c.message, c.from_user_name);
@@ -122,7 +141,6 @@ export default function CollaborationHub({ userId, textColor = '#000000', bgColo
       });
     }
 
-    // Category filter
     if (filterCategory !== "all") {
       filtered = filtered.filter(c => {
         const cat = categorizeRequest(c.subject, c.message);
@@ -149,6 +167,78 @@ export default function CollaborationHub({ userId, textColor = '#000000', bgColo
     }
   };
 
+  // AI Analysis Function
+  const analyzeWithAI = async (collab) => {
+    setSelectedCollab(collab);
+    setShowAiPanel(true);
+    setAiLoading(true);
+    setAiAnalysis(null);
+    setAiReplies(null);
+
+    try {
+      const response = await axios.post(
+        `${BACKEND_URL}/api/collaborations/ai/analyze`,
+        {
+          subject: collab.subject,
+          message: collab.message,
+          from_user_name: collab.from_user_name
+        },
+        { withCredentials: true }
+      );
+      setAiAnalysis(response.data);
+      toast.success("AI analysis complete!");
+    } catch (err) {
+      console.error("AI analysis error:", err);
+      toast.error("AI analysis failed");
+    } finally {
+      setAiLoading(false);
+    }
+  };
+
+  // AI Reply Suggestions Function
+  const getAIReplySuggestions = async (collab, tone = "professional") => {
+    setAiLoading(true);
+
+    try {
+      const response = await axios.post(
+        `${BACKEND_URL}/api/collaborations/ai/suggest-reply`,
+        {
+          subject: collab.subject,
+          message: collab.message,
+          from_user_name: collab.from_user_name,
+          reply_tone: tone
+        },
+        { withCredentials: true }
+      );
+      setAiReplies(response.data.replies);
+      toast.success("Reply suggestions ready!");
+    } catch (err) {
+      console.error("AI reply error:", err);
+      toast.error("Failed to generate replies");
+    } finally {
+      setAiLoading(false);
+    }
+  };
+
+  // Batch Analysis Function
+  const runBatchAnalysis = async () => {
+    setBatchLoading(true);
+    try {
+      const response = await axios.post(
+        `${BACKEND_URL}/api/collaborations/ai/batch-analyze`,
+        {},
+        { withCredentials: true }
+      );
+      setBatchAnalysis(response.data);
+      toast.success("Batch analysis complete!");
+    } catch (err) {
+      console.error("Batch analysis error:", err);
+      toast.error("Batch analysis failed");
+    } finally {
+      setBatchLoading(false);
+    }
+  };
+
   const stats = {
     total: collaborations.length,
     unread: collaborations.filter(c => !c.read).length,
@@ -169,22 +259,40 @@ export default function CollaborationHub({ userId, textColor = '#000000', bgColo
   return (
     <div className="space-y-6">
       {/* Header with Stats */}
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between flex-wrap gap-4">
         <div className="flex items-center gap-3">
           <div className="p-3 rounded-xl" style={{ backgroundColor: 'rgba(1, 50, 32, 0.1)' }}>
-            <MessageSquare className="w-6 h-6" style={{ color: '#013220' }} />
+            <Brain className="w-6 h-6" style={{ color: '#013220' }} />
           </div>
           <div>
             <h2 className="font-italiana text-2xl" style={{ color: textColor }}>
-              Collaboration Hub
+              AI Collaboration Hub
             </h2>
             <p className="font-manrope text-sm opacity-70" style={{ color: textColor }}>
-              AI-powered request management
+              Powered by GPT-4o-mini
             </p>
           </div>
         </div>
         
         <div className="flex items-center gap-3">
+          {/* AI Batch Analysis Button */}
+          {stats.unread > 0 && (
+            <Button
+              onClick={runBatchAnalysis}
+              disabled={batchLoading}
+              className="rounded-full font-manrope font-semibold flex items-center gap-2"
+              style={{ backgroundColor: '#6366f1', color: '#FFFFFF' }}
+              data-testid="batch-analyze-btn"
+            >
+              {batchLoading ? (
+                <Loader2 className="w-4 h-4 animate-spin" />
+              ) : (
+                <Zap className="w-4 h-4" />
+              )}
+              Analyze All ({stats.unread})
+            </Button>
+          )}
+          
           <div className="text-center px-4 py-2 rounded-lg" style={{ backgroundColor: 'rgba(255,255,255,0.1)', borderWidth: '1px', borderColor: textColor }}>
             <p className="font-italiana text-2xl" style={{ color: textColor }}>{stats.total}</p>
             <p className="font-manrope text-xs opacity-70" style={{ color: textColor }}>Total</p>
@@ -199,6 +307,39 @@ export default function CollaborationHub({ userId, textColor = '#000000', bgColo
           </div>
         </div>
       </div>
+
+      {/* Batch Analysis Results */}
+      {batchAnalysis && (
+        <div 
+          className="p-4 rounded-xl border"
+          style={{ backgroundColor: 'rgba(99, 102, 241, 0.1)', borderColor: '#6366f1' }}
+        >
+          <div className="flex items-start gap-3">
+            <Sparkles className="w-5 h-5 text-indigo-500 mt-1" />
+            <div>
+              <h4 className="font-manrope font-bold text-indigo-600 mb-2">AI Inbox Summary</h4>
+              <p className="font-manrope text-sm mb-2" style={{ color: textColor }}>
+                {batchAnalysis.overall_summary}
+              </p>
+              {batchAnalysis.recommendations && (
+                <ul className="list-disc list-inside text-sm opacity-80" style={{ color: textColor }}>
+                  {batchAnalysis.recommendations.map((rec, i) => (
+                    <li key={i} className="font-manrope">{rec}</li>
+                  ))}
+                </ul>
+              )}
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setBatchAnalysis(null)}
+                className="mt-2 text-indigo-600"
+              >
+                Dismiss
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Search and Filters */}
       <div className="flex items-center gap-3 flex-wrap">
@@ -269,17 +410,18 @@ export default function CollaborationHub({ userId, textColor = '#000000', bgColo
             filteredCollabs.map((collab) => {
               const category = categorizeRequest(collab.subject, collab.message);
               const priority = calculatePriority(collab.subject, collab.message, collab.from_user_name);
+              const isExpanded = expandedCollab === collab.message_id;
               
               return (
                 <div
                   key={collab.message_id}
-                  className="p-6 rounded-2xl transition-all hover:shadow-lg cursor-pointer"
+                  className="p-6 rounded-2xl transition-all hover:shadow-lg"
                   style={{
                     backgroundColor: collab.read ? 'rgba(255,255,255,0.05)' : 'rgba(255,255,255,0.1)',
                     borderWidth: '1px',
                     borderColor: collab.read ? 'rgba(255,255,255,0.1)' : textColor,
                   }}
-                  onClick={() => !collab.read && markAsRead(collab.message_id)}
+                  data-testid={`collab-card-${collab.message_id}`}
                 >
                   <div className="flex items-start gap-4">
                     {/* User Picture */}
@@ -326,7 +468,7 @@ export default function CollaborationHub({ userId, textColor = '#000000', bgColo
                         {collab.message}
                       </p>
 
-                      <div className="flex items-center justify-between">
+                      <div className="flex items-center justify-between flex-wrap gap-2">
                         <p className="font-manrope text-xs opacity-50" style={{ color: textColor }}>
                           {new Date(collab.created_at).toLocaleDateString('en-US', { 
                             month: 'short', 
@@ -338,6 +480,30 @@ export default function CollaborationHub({ userId, textColor = '#000000', bgColo
                         </p>
 
                         <div className="flex items-center gap-2">
+                          {/* AI Analyze Button */}
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => analyzeWithAI(collab)}
+                            className="rounded-full font-manrope font-semibold flex items-center gap-1"
+                            data-testid={`ai-analyze-btn-${collab.message_id}`}
+                          >
+                            <Wand2 className="w-4 h-4" />
+                            AI Analyze
+                          </Button>
+                          
+                          {!collab.read && (
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => markAsRead(collab.message_id)}
+                              className="rounded-full font-manrope"
+                            >
+                              <CheckCircle className="w-4 h-4 mr-1" />
+                              Mark Read
+                            </Button>
+                          )}
+                          
                           <Button
                             size="sm"
                             className="rounded-full font-manrope font-semibold"
@@ -356,6 +522,130 @@ export default function CollaborationHub({ userId, textColor = '#000000', bgColo
           )}
         </TabsContent>
       </Tabs>
+
+      {/* AI Analysis Dialog */}
+      <Dialog open={showAiPanel} onOpenChange={setShowAiPanel}>
+        <DialogContent className="sm:max-w-xl">
+          <DialogHeader>
+            <DialogTitle className="font-italiana text-2xl flex items-center gap-2">
+              <Brain className="w-6 h-6 text-indigo-600" />
+              AI Analysis
+            </DialogTitle>
+            <DialogDescription className="font-manrope">
+              AI-powered insights for this collaboration request
+            </DialogDescription>
+          </DialogHeader>
+
+          {selectedCollab && (
+            <div className="space-y-4 mt-4">
+              {/* Original Message Summary */}
+              <div className="p-3 rounded-lg bg-gray-50">
+                <p className="font-manrope text-sm">
+                  <span className="font-semibold">From:</span> {selectedCollab.from_user_name}
+                </p>
+                <p className="font-manrope text-sm">
+                  <span className="font-semibold">Subject:</span> {selectedCollab.subject}
+                </p>
+              </div>
+
+              {aiLoading && !aiAnalysis && (
+                <div className="flex items-center justify-center py-8">
+                  <Loader2 className="w-8 h-8 animate-spin text-indigo-600" />
+                  <span className="ml-3 font-manrope">Analyzing with AI...</span>
+                </div>
+              )}
+
+              {/* AI Analysis Results */}
+              {aiAnalysis && (
+                <div className="space-y-4">
+                  <div className="p-4 rounded-xl bg-indigo-50 border border-indigo-200">
+                    <h4 className="font-manrope font-bold text-indigo-700 mb-2 flex items-center gap-2">
+                      <Sparkles className="w-4 h-4" />
+                      AI Summary
+                    </h4>
+                    <p className="font-manrope text-sm text-gray-700">{aiAnalysis.summary}</p>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="p-3 rounded-lg bg-purple-50 border border-purple-200">
+                      <p className="font-manrope text-xs text-purple-600 mb-1">Request Type</p>
+                      <p className="font-manrope font-semibold text-purple-800">{aiAnalysis.request_type}</p>
+                    </div>
+                    <div className="p-3 rounded-lg bg-orange-50 border border-orange-200">
+                      <p className="font-manrope text-xs text-orange-600 mb-1">AI Priority</p>
+                      <p className="font-manrope font-semibold text-orange-800">{aiAnalysis.priority}</p>
+                    </div>
+                  </div>
+
+                  {aiAnalysis.action_items && (
+                    <div className="p-4 rounded-xl bg-green-50 border border-green-200">
+                      <h4 className="font-manrope font-bold text-green-700 mb-2">Recommended Actions</h4>
+                      <ul className="list-disc list-inside space-y-1">
+                        {aiAnalysis.action_items.map((item, i) => (
+                          <li key={i} className="font-manrope text-sm text-gray-700">{item}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Reply Suggestions Section */}
+              <div className="border-t pt-4">
+                <div className="flex items-center justify-between mb-3">
+                  <h4 className="font-manrope font-bold flex items-center gap-2">
+                    <MessageSquare className="w-4 h-4" />
+                    AI Reply Suggestions
+                  </h4>
+                  <div className="flex items-center gap-2">
+                    <Select defaultValue="professional" onValueChange={(tone) => getAIReplySuggestions(selectedCollab, tone)}>
+                      <SelectTrigger className="w-[140px] h-8 text-xs">
+                        <SelectValue placeholder="Tone" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="professional">Professional</SelectItem>
+                        <SelectItem value="friendly">Friendly</SelectItem>
+                        <SelectItem value="brief">Brief</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <Button
+                      size="sm"
+                      onClick={() => getAIReplySuggestions(selectedCollab)}
+                      disabled={aiLoading}
+                      className="bg-indigo-600 text-white"
+                    >
+                      {aiLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : "Generate"}
+                    </Button>
+                  </div>
+                </div>
+
+                {aiReplies && (
+                  <div className="space-y-3">
+                    {aiReplies.map((reply, i) => (
+                      <div 
+                        key={i}
+                        className="p-3 rounded-lg border hover:bg-gray-50 cursor-pointer transition-colors"
+                        onClick={() => {
+                          navigator.clipboard.writeText(reply.text);
+                          toast.success("Reply copied to clipboard!");
+                        }}
+                      >
+                        <div className="flex items-center gap-2 mb-2">
+                          <Badge variant="outline" className="capitalize text-xs">
+                            {reply.type}
+                          </Badge>
+                          <span className="text-xs text-gray-400">Click to copy</span>
+                        </div>
+                        <p className="font-manrope text-sm">{reply.text}</p>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
