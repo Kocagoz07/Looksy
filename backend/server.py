@@ -226,6 +226,115 @@ async def get_current_user(request: Request) -> Optional[User]:
     return User(**user_doc)
 
 # Auth endpoints
+@api_router.post("/auth/register")
+async def register_with_password(request: EmailPasswordRegister, response: Response):
+    email = request.email.lower()
+    
+    # Check if user already exists
+    existing_user = await db.users.find_one({"email": email}, {"_id": 0})
+    if existing_user:
+        raise HTTPException(status_code=400, detail="Email already registered")
+    
+    # Hash password
+    password_hash = pwd_context.hash(request.password)
+    
+    # Create new user
+    user_id = f"user_{uuid.uuid4().hex[:12]}"
+    new_user = User(
+        user_id=user_id,
+        email=email,
+        name=request.name,
+        password_hash=password_hash,
+        category=request.category
+    )
+    
+    user_dict = new_user.model_dump()
+    user_dict["created_at"] = user_dict["created_at"].isoformat()
+    await db.users.insert_one(user_dict)
+    
+    # Create session
+    session_token = f"session_{secrets.token_urlsafe(32)}"
+    session_expires_at = datetime.now(timezone.utc) + timedelta(days=7)
+    
+    session = UserSession(
+        user_id=user_id,
+        session_token=session_token,
+        expires_at=session_expires_at
+    )
+    session_dict = session.model_dump()
+    session_dict["expires_at"] = session_dict["expires_at"].isoformat()
+    session_dict["created_at"] = session_dict["created_at"].isoformat()
+    
+    await db.user_sessions.insert_one(session_dict)
+    
+    # Set cookie
+    response.set_cookie(
+        key="session_token",
+        value=session_token,
+        httponly=True,
+        secure=True,
+        samesite="none",
+        path="/",
+        max_age=7 * 24 * 60 * 60
+    )
+    
+    # Return user without password_hash
+    user_dict_response = {k: v for k, v in user_dict.items() if k != 'password_hash'}
+    return user_dict_response
+
+@api_router.post("/auth/login")
+async def login_with_password(request: EmailPasswordLogin, response: Response):
+    email = request.email.lower()
+    
+    # Find user
+    user_doc = await db.users.find_one({"email": email}, {"_id": 0})
+    if not user_doc:
+        raise HTTPException(status_code=401, detail="Invalid email or password")
+    
+    # Verify password
+    if not user_doc.get("password_hash"):
+        raise HTTPException(status_code=401, detail="Please use magic link to sign in")
+    
+    if not pwd_context.verify(request.password, user_doc["password_hash"]):
+        raise HTTPException(status_code=401, detail="Invalid email or password")
+    
+    # Update category if provided
+    if user_doc.get("category") != request.category:
+        await db.users.update_one(
+            {"user_id": user_doc["user_id"]},
+            {"$set": {"category": request.category}}
+        )
+    
+    # Create session
+    session_token = f"session_{secrets.token_urlsafe(32)}"
+    session_expires_at = datetime.now(timezone.utc) + timedelta(days=7)
+    
+    session = UserSession(
+        user_id=user_doc["user_id"],
+        session_token=session_token,
+        expires_at=session_expires_at
+    )
+    session_dict = session.model_dump()
+    session_dict["expires_at"] = session_dict["expires_at"].isoformat()
+    session_dict["created_at"] = session_dict["created_at"].isoformat()
+    
+    await db.user_sessions.insert_one(session_dict)
+    
+    # Set cookie
+    response.set_cookie(
+        key="session_token",
+        value=session_token,
+        httponly=True,
+        secure=True,
+        samesite="none",
+        path="/",
+        max_age=7 * 24 * 60 * 60
+    )
+    
+    # Return user without password_hash
+    user_dict_response = {k: v for k, v in user_doc.items() if k != 'password_hash'}
+    return user_dict_response
+
 @api_router.post("/auth/send-magic-link")
 async def send_magic_link(request: MagicLinkRequest):
     email = request.email.lower()
