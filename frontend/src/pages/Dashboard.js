@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import axios from "axios";
-import { Spade, Heart, Star, Plus, User, LogOut, Upload } from "lucide-react";
+import { Spade, Heart, Star, Plus, User, LogOut, Upload, Bookmark, Crown, Wallet } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import PostCard from "@/components/PostCard";
 import { toast } from "sonner";
