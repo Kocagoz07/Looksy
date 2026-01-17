@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { ArrowLeft, Briefcase, DollarSign, CheckCircle, Wallet, Camera, Edit2, Send, Plus, MessageSquare, UserPlus, UserCheck, Mail } from "lucide-react";
+import { ArrowLeft, Briefcase, DollarSign, CheckCircle, Wallet, Camera, Edit2, Send, Plus, MessageSquare, UserPlus, UserCheck, Mail, Users } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
