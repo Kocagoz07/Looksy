@@ -195,6 +195,16 @@ export default function PostDetail() {
                 <Heart className={`w-6 h-6 ${isLiked ? 'fill-current text-red-500' : ''}`} />
                 <span className="font-manrope font-semibold">{post.likes_count}</span>
               </Button>
+              
+              <Button
+                data-testid="star-btn"
+                onClick={handleStar}
+                variant="ghost"
+                className="flex items-center gap-2"
+                title={isStarred ? "Unsave" : "Save"}
+              >
+                <Star className={`w-6 h-6 ${isStarred ? 'fill-current text-yellow-500' : ''}`} />
+              </Button>
             </div>
 
             {/* Caption */}
