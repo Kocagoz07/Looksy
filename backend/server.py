@@ -15,6 +15,7 @@ import io
 from bson import ObjectId
 import gridfs
 import pymongo
+from passlib.context import CryptContext
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
