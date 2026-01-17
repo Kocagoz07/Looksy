@@ -239,9 +239,19 @@ export default function PostDetail() {
             {/* Products */}
             {post.products && post.products.length > 0 && (
               <div>
-                <h3 className="font-playfair text-lg font-semibold mb-3">Products</h3>
-                {post.total_price && (
-                  <p className="font-manrope text-sm text-gray-600 mb-3">Total: ${post.total_price}</p>
+                <h3 className="font-italiana text-lg font-semibold mb-3">Products</h3>
+                {(post.total_price || post.total_price_eur) && (
+                  <div className="mb-4 p-4 bg-gray-50 rounded-lg">
+                    <p className="font-manrope text-sm text-gray-600 mb-1">Total Outfit Price</p>
+                    <div className="flex items-baseline gap-3">
+                      {post.total_price_eur && (
+                        <p className="font-manrope text-2xl font-bold text-black">€{post.total_price_eur.toFixed(2)}</p>
+                      )}
+                      {post.total_price && (
+                        <p className="font-manrope text-lg text-gray-500">${post.total_price.toFixed(2)}</p>
+                      )}
+                    </div>
+                  </div>
                 )}
                 <div className="space-y-2">
                   {post.products.map((product, index) => (
