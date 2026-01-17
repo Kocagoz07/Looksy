@@ -181,6 +181,17 @@ class CollaborationRequest(BaseModel):
     subject: str
     message: str
 
+class AIAnalysisRequest(BaseModel):
+    subject: str
+    message: str
+    from_user_name: str
+
+class AIReplyRequest(BaseModel):
+    subject: str
+    message: str
+    from_user_name: str
+    reply_tone: str = "professional"  # professional, friendly, brief
+
 # Helper function to convert USD to EUR
 def usd_to_eur(usd_amount: float) -> float:
     rate = float(os.environ.get('USD_TO_EUR_RATE', '0.92'))
