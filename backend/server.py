@@ -669,6 +669,30 @@ async def get_stars_posts(limit: int = 50):
     
     return posts
 
+@api_router.get("/posts/celebrity")
+async def get_celebrity_posts_v2(skip: int = 0, limit: int = 20):
+    """Get posts with 10,000+ likes - Celebrity/Star posts"""
+    posts = await db.posts.find(
+        {"is_deleted": False, "likes_count": {"$gte": 10000}},
+        {"_id": 0}
+    ).sort("likes_count", -1).skip(skip).limit(limit).to_list(limit)
+    
+    # Add user info to each post
+    for post in posts:
+        owner = await db.users.find_one({"user_id": post["user_id"]}, {"_id": 0, "name": 1, "picture": 1, "category": 1})
+        if owner:
+            post["user_name"] = owner.get("name", "Unknown")
+            post["user_picture"] = owner.get("picture")
+            post["user_category"] = owner.get("category")
+    
+    total = await db.posts.count_documents({"is_deleted": False, "likes_count": {"$gte": 10000}})
+    
+    return {
+        "posts": posts,
+        "total": total,
+        "has_more": skip + limit < total
+    }
+
 @api_router.get("/posts/{post_id}", response_model=Post)
 async def get_post(post_id: str):
     post_doc = await db.posts.find_one({"post_id": post_id}, {"_id": 0})
