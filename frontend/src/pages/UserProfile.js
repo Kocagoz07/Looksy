@@ -32,8 +32,6 @@ export default function UserProfile() {
   const [collabSubject, setCollabSubject] = useState("");
   const [collabMessage, setCollabMessage] = useState("");
   const [uploadingPicture, setUploadingPicture] = useState(false);
-  const [collaborations, setCollaborations] = useState([]);
-  const [showCollaborations, setShowCollaborations] = useState(false);
   const [isFollowing, setIsFollowing] = useState(false);
   const [followLoading, setFollowLoading] = useState(false);
 
@@ -57,12 +55,6 @@ export default function UserProfile() {
       // Check if following
       if (currentUserRes.data.following) {
         setIsFollowing(currentUserRes.data.following.includes(userId));
-      }
-      
-      // Fetch collaborations if own profile
-      if (currentUserRes.data.user_id === userId) {
-        const collabRes = await axios.get(`${BACKEND_URL}/api/collaborations/inbox`, { withCredentials: true });
-        setCollaborations(collabRes.data);
       }
     } catch (err) {
       console.error("Error fetching profile:", err);
