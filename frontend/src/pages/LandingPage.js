@@ -120,49 +120,73 @@ export default function LandingPage() {
   }
 
   return (
-    <div className="min-h-screen bg-white flex">
-      {/* Left Side - Men (Spade) */}
+    <div className="min-h-screen flex">
+      {/* Left Side - Men (Spade) - Black Background */}
       <div 
-        className={`w-1/2 min-h-screen flex flex-col items-center justify-center p-12 transition-all duration-500 cursor-pointer relative overflow-hidden ${
-          selectedGender === 'men' ? 'bg-black' : 'bg-gray-900'
+        className={`w-1/2 min-h-screen flex flex-col items-center justify-center p-16 transition-all duration-500 cursor-pointer relative ${
+          selectedGender === 'men' ? 'bg-black' : 'bg-black opacity-70'
         }`}
         onClick={() => setSelectedGender('men')}
         data-testid="gender-men-section"
       >
-        <div className="relative z-10 text-center space-y-8">
-          {/* Spade Icon */}
-          <div className={`transition-all duration-300 ${selectedGender === 'men' ? 'scale-100 opacity-100' : 'scale-90 opacity-60'}`}>
-            <div className="w-32 h-32 flex items-center justify-center mx-auto">
-              <Spade className="w-24 h-24 text-white fill-white" />
-            </div>
+        <div className="text-center space-y-10">
+          {/* Spade Icon - Outline */}
+          <div className={`transition-all duration-300 ${selectedGender === 'men' ? 'scale-100 opacity-100' : 'scale-95 opacity-60'}`}>
+            <Spade className="w-32 h-32 mx-auto text-white" strokeWidth={1.5} />
           </div>
           
+          {/* Looksy Text */}
+          <div>
+            <h1 className="font-playfair text-6xl font-normal text-white tracking-wide" style={{ fontStyle: 'italic' }}>
+              Looksy
+            </h1>
+          </div>
+          
+          {/* Tagline */}
+          <div>
+            <p className="font-manrope text-white text-xs tracking-[0.3em] uppercase font-light">
+              Fashion Redefined
+            </p>
+          </div>
+
           {selectedGender === 'men' && (
-            <div className="absolute top-6 right-6 animate-fade-in">
+            <div className="absolute top-8 right-8 animate-fade-in">
               <div className="w-2 h-2 rounded-full bg-white"></div>
             </div>
           )}
         </div>
       </div>
 
-      {/* Right Side - Women (Ace of Hearts) */}
+      {/* Right Side - Women (Heart) - Burgundy Background */}
       <div 
-        className={`w-1/2 min-h-screen flex flex-col items-center justify-center p-12 transition-all duration-500 cursor-pointer relative overflow-hidden ${
-          selectedGender === 'women' ? 'bg-[#2C0A0A]' : 'bg-[#3D1010]'
+        className={`w-1/2 min-h-screen flex flex-col items-center justify-center p-16 transition-all duration-500 cursor-pointer relative ${
+          selectedGender === 'women' ? 'bg-[#800020]' : 'bg-[#800020] opacity-70'
         }`}
         onClick={() => setSelectedGender('women')}
         data-testid="gender-women-section"
       >
-        <div className="relative z-10 text-center space-y-8">
-          {/* Heart Icon */}
-          <div className={`transition-all duration-300 ${selectedGender === 'women' ? 'scale-100 opacity-100' : 'scale-90 opacity-60'}`}>
-            <div className="w-32 h-32 flex items-center justify-center mx-auto">
-              <Heart className="w-24 h-24 text-white fill-white" />
-            </div>
+        <div className="text-center space-y-10">
+          {/* Heart Icon - Outline */}
+          <div className={`transition-all duration-300 ${selectedGender === 'women' ? 'scale-100 opacity-100' : 'scale-95 opacity-60'}`}>
+            <Heart className="w-32 h-32 mx-auto text-white" strokeWidth={1.5} />
+          </div>
+          
+          {/* Looksy Text */}
+          <div>
+            <h1 className="font-playfair text-6xl font-normal text-white tracking-wide" style={{ fontStyle: 'italic' }}>
+              Looksy
+            </h1>
+          </div>
+          
+          {/* Tagline */}
+          <div>
+            <p className="font-manrope text-white text-xs tracking-[0.3em] uppercase font-light">
+              Fashion Redefined
+            </p>
           </div>
 
           {selectedGender === 'women' && (
-            <div className="absolute top-6 right-6 animate-fade-in">
+            <div className="absolute top-8 right-8 animate-fade-in">
               <div className="w-2 h-2 rounded-full bg-white"></div>
             </div>
           )}
@@ -172,35 +196,35 @@ export default function LandingPage() {
       {/* Floating Login Card */}
       {selectedGender && (
         <div className="fixed inset-0 flex items-center justify-center pointer-events-none z-50">
-          <div className="pointer-events-auto bg-white rounded-3xl shadow-2xl p-10 max-w-md w-full mx-4 animate-fade-in">
+          <div className="pointer-events-auto bg-white rounded-3xl shadow-2xl p-12 max-w-lg w-full mx-4 animate-fade-in">
             {/* Logo */}
-            <div className="text-center mb-8 space-y-2">
-              <h1 className="font-playfair text-5xl font-bold tracking-wide text-black">
+            <div className="text-center mb-10 space-y-3">
+              <h1 className="font-playfair text-6xl font-normal tracking-wide text-black" style={{ fontStyle: 'italic' }}>
                 Looksy
               </h1>
-              <p className="font-manrope text-sm tracking-widest uppercase text-gray-600">
+              <p className="font-manrope text-xs tracking-[0.3em] uppercase text-gray-500 font-light">
                 Fashion Redefined
               </p>
-              <div className="w-16 h-0.5 bg-black mx-auto mt-4"></div>
+              <div className="w-20 h-px bg-gray-300 mx-auto mt-6"></div>
             </div>
 
-            <form onSubmit={handleSendMagicLink} className="space-y-5">
+            <form onSubmit={handleSendMagicLink} className="space-y-6">
               {/* Email Input */}
               <div className="space-y-2">
                 <div className="relative">
-                  <Mail className="absolute left-4 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
+                  <Mail className="absolute left-5 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
                   <Input
                     data-testid="email-input"
                     type="email"
                     value={email}
                     onChange={handleEmailChange}
                     placeholder="Email address"
-                    className="pl-12 h-14 rounded-full border-gray-200 font-manrope text-base focus:border-black focus:ring-black"
+                    className="pl-14 h-16 rounded-full border-gray-200 font-manrope text-base focus:border-black focus:ring-black"
                     required
                   />
                 </div>
                 {emailError && (
-                  <p className="text-xs text-red-500 font-manrope ml-4">{emailError}</p>
+                  <p className="text-xs text-red-500 font-manrope ml-5">{emailError}</p>
                 )}
               </div>
 
@@ -209,7 +233,7 @@ export default function LandingPage() {
                 data-testid="send-magic-link-btn"
                 type="submit"
                 disabled={loading || !isFormValid}
-                className="w-full h-14 bg-black text-white hover:bg-gray-900 rounded-full font-manrope font-medium text-base transition-all disabled:opacity-50 disabled:cursor-not-allowed group"
+                className="w-full h-16 bg-black text-white hover:bg-gray-900 rounded-full font-manrope font-medium text-base transition-all disabled:opacity-50 disabled:cursor-not-allowed group"
               >
                 {loading ? (
                   <span className="flex items-center justify-center">
@@ -225,7 +249,7 @@ export default function LandingPage() {
               </Button>
 
               {/* Info Text */}
-              <p className="text-center font-manrope text-xs text-gray-500 mt-4">
+              <p className="text-center font-manrope text-xs text-gray-500 mt-6">
                 We'll send you a secure sign-in link
               </p>
             </form>
