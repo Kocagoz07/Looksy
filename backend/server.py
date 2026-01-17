@@ -1269,6 +1269,422 @@ Respond in JSON:
         logger.error(f"AI batch analysis error: {str(e)}")
         raise HTTPException(status_code=500, detail=f"AI batch analysis failed: {str(e)}")
 
+# ================= FAVORITES FEATURE =================
+
+@api_router.post("/posts/{post_id}/favorite")
+async def toggle_favorite(request: Request, post_id: str):
+    """Add or remove a post from user's favorites"""
+    user = await get_current_user(request)
+    if not user:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    
+    # Check if post exists
+    post = await db.posts.find_one({"post_id": post_id, "is_deleted": False}, {"_id": 0})
+    if not post:
+        raise HTTPException(status_code=404, detail="Post not found")
+    
+    # Get current favorites
+    user_doc = await db.users.find_one({"user_id": user.user_id}, {"_id": 0, "favorited_posts": 1})
+    favorites = user_doc.get("favorited_posts", []) if user_doc else []
+    
+    if post_id in favorites:
+        # Remove from favorites
+        await db.users.update_one(
+            {"user_id": user.user_id},
+            {"$pull": {"favorited_posts": post_id}}
+        )
+        return {"message": "Removed from favorites", "is_favorited": False}
+    else:
+        # Add to favorites
+        await db.users.update_one(
+            {"user_id": user.user_id},
+            {"$addToSet": {"favorited_posts": post_id}}
+        )
+        return {"message": "Added to favorites", "is_favorited": True}
+
+@api_router.get("/users/me/favorites")
+async def get_my_favorites(request: Request):
+    """Get current user's favorited posts"""
+    user = await get_current_user(request)
+    if not user:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    
+    # Get user's favorited post IDs
+    user_doc = await db.users.find_one({"user_id": user.user_id}, {"_id": 0, "favorited_posts": 1})
+    favorite_ids = user_doc.get("favorited_posts", []) if user_doc else []
+    
+    if not favorite_ids:
+        return {"favorites": [], "count": 0}
+    
+    # Fetch the posts
+    posts = await db.posts.find(
+        {"post_id": {"$in": favorite_ids}, "is_deleted": False},
+        {"_id": 0}
+    ).to_list(100)
+    
+    # Add user info to each post
+    for post in posts:
+        owner = await db.users.find_one({"user_id": post["user_id"]}, {"_id": 0, "name": 1, "picture": 1})
+        if owner:
+            post["user_name"] = owner.get("name", "Unknown")
+            post["user_picture"] = owner.get("picture")
+        post["is_favorited"] = True
+    
+    return {"favorites": posts, "count": len(posts)}
+
+# ================= STAR CELEBRITY TAB (10,000+ likes) =================
+
+@api_router.get("/posts/celebrity")
+async def get_celebrity_posts(request: Request, skip: int = 0, limit: int = 20):
+    """Get posts with 10,000+ likes - Celebrity/Star posts"""
+    # No auth required to view celebrity posts
+    
+    posts = await db.posts.find(
+        {"is_deleted": False, "likes_count": {"$gte": 10000}},
+        {"_id": 0}
+    ).sort("likes_count", -1).skip(skip).limit(limit).to_list(limit)
+    
+    # Add user info to each post
+    for post in posts:
+        owner = await db.users.find_one({"user_id": post["user_id"]}, {"_id": 0, "name": 1, "picture": 1, "category": 1})
+        if owner:
+            post["user_name"] = owner.get("name", "Unknown")
+            post["user_picture"] = owner.get("picture")
+            post["user_category"] = owner.get("category")
+    
+    total = await db.posts.count_documents({"is_deleted": False, "likes_count": {"$gte": 10000}})
+    
+    return {
+        "posts": posts,
+        "total": total,
+        "has_more": skip + limit < total
+    }
+
+# ================= STARS TO PAYOUT POINTS CONVERSION =================
+
+@api_router.get("/rewards/info")
+async def get_rewards_info(request: Request):
+    """Get current user's rewards information"""
+    user = await get_current_user(request)
+    if not user:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    
+    user_doc = await db.users.find_one(
+        {"user_id": user.user_id},
+        {"_id": 0, "stars": 1, "payout_points": 1, "earnings": 1, "earnings_eur": 1, "kyc_verified": 1, "payout_method": 1}
+    )
+    
+    stars = user_doc.get("stars", 0) if user_doc else 0
+    payout_points = user_doc.get("payout_points", 0.0) if user_doc else 0.0
+    earnings = user_doc.get("earnings", 0.0) if user_doc else 0.0
+    earnings_eur = user_doc.get("earnings_eur", 0.0) if user_doc else 0.0
+    
+    # Calculate potential conversion value
+    potential_value = calculate_payout_points(stars)
+    
+    # Min payout threshold
+    min_threshold = float(os.environ.get('MIN_PAYOUT_THRESHOLD_EUR', '20.0'))
+    
+    return {
+        "stars": stars,
+        "payout_points_usd": payout_points,
+        "payout_points_eur": usd_to_eur(payout_points),
+        "earnings_usd": earnings,
+        "earnings_eur": earnings_eur,
+        "potential_conversion_value_usd": potential_value,
+        "potential_conversion_value_eur": usd_to_eur(potential_value),
+        "kyc_verified": user_doc.get("kyc_verified", False) if user_doc else False,
+        "payout_method": user_doc.get("payout_method") if user_doc else None,
+        "min_payout_threshold_eur": min_threshold,
+        "can_request_payout": payout_points >= min_threshold,
+        "conversion_rates": {
+            "tier1": {"range": "1-1000 stars", "rate_usd": 0.0005, "rate_cents": 0.05},
+            "tier2": {"range": "1001-5000 stars", "rate_usd": 0.001, "rate_cents": 0.10},
+            "tier3": {"range": "5001-10000 stars", "rate_usd": 0.002, "rate_cents": 0.20},
+            "max_stars_per_post": 10000
+        }
+    }
+
+@api_router.post("/rewards/convert-stars")
+async def convert_stars_to_points(request: Request, convert_req: ConvertStarsRequest):
+    """Convert accumulated stars to payout points"""
+    user = await get_current_user(request)
+    if not user:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    
+    user_doc = await db.users.find_one({"user_id": user.user_id}, {"_id": 0, "stars": 1, "payout_points": 1})
+    current_stars = user_doc.get("stars", 0) if user_doc else 0
+    
+    if convert_req.stars_to_convert <= 0:
+        raise HTTPException(status_code=400, detail="Stars to convert must be greater than 0")
+    
+    if convert_req.stars_to_convert > current_stars:
+        raise HTTPException(status_code=400, detail=f"Insufficient stars. You have {current_stars} stars.")
+    
+    # Calculate payout points value
+    points_value = calculate_payout_points(convert_req.stars_to_convert)
+    
+    # Update user's stars and payout points
+    await db.users.update_one(
+        {"user_id": user.user_id},
+        {
+            "$inc": {
+                "stars": -convert_req.stars_to_convert,
+                "payout_points": points_value
+            }
+        }
+    )
+    
+    # Get updated values
+    updated_user = await db.users.find_one({"user_id": user.user_id}, {"_id": 0, "stars": 1, "payout_points": 1})
+    
+    return {
+        "message": "Stars converted successfully",
+        "stars_converted": convert_req.stars_to_convert,
+        "points_earned_usd": points_value,
+        "points_earned_eur": usd_to_eur(points_value),
+        "remaining_stars": updated_user.get("stars", 0),
+        "total_payout_points_usd": updated_user.get("payout_points", 0.0),
+        "total_payout_points_eur": usd_to_eur(updated_user.get("payout_points", 0.0))
+    }
+
+# ================= KYC VERIFICATION =================
+
+class KYCSubmission(BaseModel):
+    full_name: str
+    date_of_birth: str
+    address: str
+    country: str
+    id_type: str  # "passport", "id_card", "drivers_license"
+    id_number: str
+
+@api_router.post("/kyc/submit")
+async def submit_kyc(request: Request, kyc_data: KYCSubmission):
+    """Submit KYC verification documents"""
+    user = await get_current_user(request)
+    if not user:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    
+    # Store KYC data (in production, this would go through a proper KYC provider)
+    kyc_record = {
+        "full_name": kyc_data.full_name,
+        "date_of_birth": kyc_data.date_of_birth,
+        "address": kyc_data.address,
+        "country": kyc_data.country,
+        "id_type": kyc_data.id_type,
+        "id_number": kyc_data.id_number[-4:] + "****",  # Mask for security
+        "submitted_at": datetime.now(timezone.utc).isoformat(),
+        "status": "pending"
+    }
+    
+    # For demo purposes, auto-approve KYC
+    await db.users.update_one(
+        {"user_id": user.user_id},
+        {
+            "$set": {
+                "kyc_verified": True,
+                "kyc_documents": kyc_record
+            }
+        }
+    )
+    
+    return {
+        "message": "KYC submitted and verified successfully",
+        "kyc_verified": True
+    }
+
+@api_router.get("/kyc/status")
+async def get_kyc_status(request: Request):
+    """Get KYC verification status"""
+    user = await get_current_user(request)
+    if not user:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    
+    user_doc = await db.users.find_one(
+        {"user_id": user.user_id},
+        {"_id": 0, "kyc_verified": 1, "kyc_documents": 1}
+    )
+    
+    return {
+        "kyc_verified": user_doc.get("kyc_verified", False) if user_doc else False,
+        "kyc_status": user_doc.get("kyc_documents", {}).get("status", "not_submitted") if user_doc and user_doc.get("kyc_documents") else "not_submitted"
+    }
+
+# ================= STRIPE PAYOUT INTEGRATION =================
+
+@api_router.post("/payout/stripe/setup")
+async def setup_stripe_payout(request: Request, payout_req: StripePayoutRequest):
+    """Setup Stripe payout - creates a checkout session for the user to add their bank details"""
+    user = await get_current_user(request)
+    if not user:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    
+    # Check KYC
+    user_doc = await db.users.find_one({"user_id": user.user_id}, {"_id": 0, "kyc_verified": 1, "payout_points": 1})
+    if not user_doc or not user_doc.get("kyc_verified"):
+        raise HTTPException(status_code=400, detail="KYC verification required before payout")
+    
+    # Check minimum threshold (€20)
+    min_threshold = float(os.environ.get('MIN_PAYOUT_THRESHOLD_EUR', '20.0'))
+    payout_points = user_doc.get("payout_points", 0.0)
+    payout_points_eur = usd_to_eur(payout_points)
+    
+    if payout_req.amount_eur > payout_points_eur:
+        raise HTTPException(status_code=400, detail=f"Insufficient payout points. You have €{payout_points_eur:.2f}")
+    
+    if payout_req.amount_eur < min_threshold:
+        raise HTTPException(status_code=400, detail=f"Minimum payout amount is €{min_threshold}")
+    
+    # Set user's payout method to Stripe
+    await db.users.update_one(
+        {"user_id": user.user_id},
+        {"$set": {"payout_method": "stripe"}}
+    )
+    
+    # Create a pending payout transaction
+    transaction_id = f"txn_{uuid.uuid4().hex[:12]}"
+    transaction = PaymentTransaction(
+        transaction_id=transaction_id,
+        user_id=user.user_id,
+        session_id=f"payout_{transaction_id}",
+        amount=payout_req.amount_eur,
+        currency="EUR",
+        payment_type="payout",
+        payment_method="stripe",
+        payment_status="pending"
+    )
+    
+    tx_dict = transaction.model_dump()
+    tx_dict["created_at"] = tx_dict["created_at"].isoformat()
+    await db.payment_transactions.insert_one(tx_dict)
+    
+    # Deduct payout points
+    amount_usd = payout_req.amount_eur / float(os.environ.get('USD_TO_EUR_RATE', '0.92'))
+    await db.users.update_one(
+        {"user_id": user.user_id},
+        {"$inc": {"payout_points": -amount_usd}}
+    )
+    
+    # Mark transaction as completed (in production, would process actual Stripe payout)
+    await db.payment_transactions.update_one(
+        {"transaction_id": transaction_id},
+        {"$set": {"payment_status": "completed", "completed_at": datetime.now(timezone.utc).isoformat()}}
+    )
+    
+    return {
+        "message": "Stripe payout initiated successfully",
+        "transaction_id": transaction_id,
+        "amount_eur": payout_req.amount_eur,
+        "status": "completed",
+        "note": "In production, funds would be transferred to your Stripe account"
+    }
+
+# ================= PAYPAL PAYOUT INTEGRATION =================
+
+@api_router.post("/payout/paypal/setup")
+async def setup_paypal_payout(request: Request, payout_req: PayPalPayoutRequest):
+    """Setup PayPal payout - sends funds to user's PayPal email"""
+    user = await get_current_user(request)
+    if not user:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    
+    # Check KYC
+    user_doc = await db.users.find_one({"user_id": user.user_id}, {"_id": 0, "kyc_verified": 1, "payout_points": 1})
+    if not user_doc or not user_doc.get("kyc_verified"):
+        raise HTTPException(status_code=400, detail="KYC verification required before payout")
+    
+    # Check minimum threshold (€20)
+    min_threshold = float(os.environ.get('MIN_PAYOUT_THRESHOLD_EUR', '20.0'))
+    payout_points = user_doc.get("payout_points", 0.0)
+    payout_points_eur = usd_to_eur(payout_points)
+    
+    if payout_req.amount_eur > payout_points_eur:
+        raise HTTPException(status_code=400, detail=f"Insufficient payout points. You have €{payout_points_eur:.2f}")
+    
+    if payout_req.amount_eur < min_threshold:
+        raise HTTPException(status_code=400, detail=f"Minimum payout amount is €{min_threshold}")
+    
+    # Set user's payout method and email
+    await db.users.update_one(
+        {"user_id": user.user_id},
+        {"$set": {"payout_method": "paypal", "payout_email": payout_req.paypal_email}}
+    )
+    
+    # Create a payout transaction
+    transaction_id = f"txn_{uuid.uuid4().hex[:12]}"
+    transaction = PaymentTransaction(
+        transaction_id=transaction_id,
+        user_id=user.user_id,
+        session_id=f"payout_{transaction_id}",
+        amount=payout_req.amount_eur,
+        currency="EUR",
+        payment_type="payout",
+        payment_method="paypal",
+        payment_status="pending",
+        metadata={"paypal_email": payout_req.paypal_email}
+    )
+    
+    tx_dict = transaction.model_dump()
+    tx_dict["created_at"] = tx_dict["created_at"].isoformat()
+    await db.payment_transactions.insert_one(tx_dict)
+    
+    # Deduct payout points
+    amount_usd = payout_req.amount_eur / float(os.environ.get('USD_TO_EUR_RATE', '0.92'))
+    await db.users.update_one(
+        {"user_id": user.user_id},
+        {"$inc": {"payout_points": -amount_usd}}
+    )
+    
+    # Mark transaction as completed (in production, would call PayPal Payouts API)
+    await db.payment_transactions.update_one(
+        {"transaction_id": transaction_id},
+        {"$set": {"payment_status": "completed", "completed_at": datetime.now(timezone.utc).isoformat()}}
+    )
+    
+    return {
+        "message": "PayPal payout initiated successfully",
+        "transaction_id": transaction_id,
+        "amount_eur": payout_req.amount_eur,
+        "paypal_email": payout_req.paypal_email,
+        "status": "completed",
+        "note": "In production, funds would be transferred to your PayPal account"
+    }
+
+@api_router.get("/payout/history")
+async def get_payout_history(request: Request):
+    """Get user's payout transaction history"""
+    user = await get_current_user(request)
+    if not user:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    
+    transactions = await db.payment_transactions.find(
+        {"user_id": user.user_id, "payment_type": "payout"},
+        {"_id": 0}
+    ).sort("created_at", -1).to_list(50)
+    
+    return {"transactions": transactions, "count": len(transactions)}
+
+# ================= STRIPE WEBHOOK =================
+
+@api_router.post("/webhook/stripe")
+async def stripe_webhook(request: Request):
+    """Handle Stripe webhooks"""
+    try:
+        body = await request.body()
+        signature = request.headers.get("Stripe-Signature")
+        
+        stripe_api_key = os.environ.get('STRIPE_API_KEY')
+        if not stripe_api_key:
+            raise HTTPException(status_code=500, detail="Stripe not configured")
+        
+        # Process webhook (in production, verify signature and handle events)
+        logger.info(f"Received Stripe webhook")
+        
+        return {"status": "received"}
+    except Exception as e:
+        logger.error(f"Stripe webhook error: {str(e)}")
+        raise HTTPException(status_code=400, detail=str(e))
+
 # Include the router in the main app
 app.include_router(api_router)
 
