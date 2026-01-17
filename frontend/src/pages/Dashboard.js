@@ -90,7 +90,7 @@ export default function Dashboard({ category = null }) {
       {/* Header */}
       <header className="border-b border-opacity-20 backdrop-blur-sm sticky top-0 z-50" style={{ borderColor: 'currentColor' }}>
         <div className="max-w-7xl mx-auto px-4 py-4 flex items-center justify-between">
-          <h1 className="font-playfair text-3xl sm:text-4xl font-bold" data-testid="looksy-logo">
+          <h1 className="font-italiana text-3xl sm:text-4xl" data-testid="looksy-logo">
             Looksy
           </h1>
           
