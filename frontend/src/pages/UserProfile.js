@@ -156,18 +156,32 @@ export default function UserProfile() {
 
   return (
     <div className="min-h-screen" style={{ backgroundColor: bgColor, color: textColor }}>
-      <header className="border-b border-opacity-20 px-4 py-4 flex items-center gap-4 sticky top-0 z-10" style={{ borderColor: textColor, backgroundColor: bgColor }}>
-        <Button
-          data-testid="back-btn"
-          onClick={() => navigate(-1)}
-          variant="ghost"
-          size="icon"
-          className="rounded-full"
-          style={{ color: textColor }}
-        >
-          <ArrowLeft className="w-5 h-5" />
-        </Button>
-        <h1 className="font-italiana text-2xl">Profile</h1>
+      <header className="border-b border-opacity-20 px-4 py-4 flex items-center justify-between sticky top-0 z-10" style={{ borderColor: textColor, backgroundColor: bgColor }}>
+        <div className="flex items-center gap-4">
+          <Button
+            data-testid="back-btn"
+            onClick={() => navigate(-1)}
+            variant="ghost"
+            size="icon"
+            className="rounded-full"
+            style={{ color: textColor }}
+          >
+            <ArrowLeft className="w-5 h-5" />
+          </Button>
+          <h1 className="font-italiana text-2xl">Profile</h1>
+        </div>
+        
+        {/* Add Post Button */}
+        {isOwnProfile && (
+          <Button
+            data-testid="add-post-btn"
+            onClick={() => navigate('/upload')}
+            className="rounded-full w-12 h-12 flex items-center justify-center"
+            style={{ backgroundColor: textColor === '#FFFFFF' ? '#FFFFFF' : '#000000', color: bgColor }}
+          >
+            <Plus className="w-6 h-6" />
+          </Button>
+        )}
       </header>
 
       <main className="max-w-5xl mx-auto px-4 py-8">
