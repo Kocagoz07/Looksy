@@ -541,6 +541,30 @@ async def logout(request: Request, response: Response):
     response.delete_cookie("session_token", path="/", samesite="none", secure=True)
     return {"message": "Logged out"}
 
+# User search endpoint
+@api_router.get("/users/search")
+async def search_users(request: Request, q: str = ""):
+    """Search users by name or email"""
+    user = await get_current_user(request)
+    if not user:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    
+    if not q or len(q) < 2:
+        return {"users": []}
+    
+    # Search by name (case-insensitive) or email prefix
+    users = await db.users.find(
+        {
+            "$or": [
+                {"name": {"$regex": q, "$options": "i"}},
+                {"email": {"$regex": f"^{q}", "$options": "i"}}
+            ]
+        },
+        {"_id": 0, "user_id": 1, "name": 1, "picture": 1, "category": 1, "bio": 1}
+    ).limit(20).to_list(20)
+    
+    return {"users": users}
+
 # User endpoints
 @api_router.get("/users/{user_id}", response_model=User)
 async def get_user(user_id: str):
