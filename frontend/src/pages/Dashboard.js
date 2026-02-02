@@ -190,10 +190,8 @@ export default function Dashboard({ category = null }) {
               activeTab === "all" ? "opacity-100" : "opacity-50 hover:opacity-75"
             }`}
           >
-            <div className="w-8 h-8 flex items-center justify-center rounded-full bg-current bg-opacity-10">
-              <div className="w-2 h-2 rounded-full bg-current"></div>
-            </div>
-            <span className="font-manrope text-xs font-semibold">All</span>
+            <Compass className="w-8 h-8" />
+            <span className="font-manrope text-xs font-semibold">Discover</span>
           </button>
           
           <button
@@ -230,6 +228,66 @@ export default function Dashboard({ category = null }) {
           </button>
         </div>
       </header>
+
+      {/* Search Users Dialog */}
+      <Dialog open={showSearchDialog} onOpenChange={setShowSearchDialog}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="font-italiana text-2xl">Search Users</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 mt-4">
+            <div className="flex gap-2">
+              <Input
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="Search by name or email..."
+                className="font-manrope"
+                onKeyDown={(e) => e.key === "Enter" && handleSearch()}
+                data-testid="search-input"
+              />
+              <Button onClick={handleSearch} disabled={searching} data-testid="search-submit">
+                {searching ? "..." : "Search"}
+              </Button>
+            </div>
+            
+            {searchResults.length > 0 && (
+              <div className="space-y-2 max-h-64 overflow-y-auto">
+                {searchResults.map((user) => (
+                  <div
+                    key={user.user_id}
+                    onClick={() => {
+                      navigate(`/profile/${user.user_id}`);
+                      setShowSearchDialog(false);
+                    }}
+                    className="flex items-center gap-3 p-3 rounded-lg hover:bg-gray-100 cursor-pointer transition-colors"
+                    data-testid={`search-result-${user.user_id}`}
+                  >
+                    {user.picture ? (
+                      <img
+                        src={user.picture.startsWith('http') ? user.picture : BACKEND_URL + user.picture}
+                        alt={user.name}
+                        className="w-10 h-10 rounded-full object-cover"
+                      />
+                    ) : (
+                      <div className="w-10 h-10 rounded-full bg-gray-200 flex items-center justify-center">
+                        <User className="w-5 h-5 text-gray-500" />
+                      </div>
+                    )}
+                    <div>
+                      <p className="font-manrope font-semibold">{user.name}</p>
+                      <p className="font-manrope text-xs text-gray-500">{user.category || "Fashion"}</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+            
+            {searchResults.length === 0 && searchQuery && !searching && (
+              <p className="text-center text-gray-500 font-manrope py-4">No users found</p>
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
 
       {/* Content */}
       <main className="max-w-7xl mx-auto px-4 py-8">
