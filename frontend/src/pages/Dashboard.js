@@ -124,18 +124,19 @@ export default function Dashboard({ category = null }) {
           </h1>
           
           <div className="flex items-center gap-2 sm:gap-3">
-            {/* Quick Links */}
+            {/* Search Users */}
             <Button
-              data-testid="favorites-link"
-              onClick={() => navigate("/favorites")}
+              data-testid="search-users-btn"
+              onClick={() => setShowSearchDialog(true)}
               variant="ghost"
               size="icon"
               className="rounded-full"
-              title="My Favorites"
+              title="Search Users"
             >
-              <Bookmark className="w-4 h-4" />
+              <Search className="w-4 h-4" />
             </Button>
             
+            {/* Celebrity Posts */}
             <Button
               data-testid="celebrity-link"
               onClick={() => navigate("/celebrity")}
@@ -145,17 +146,6 @@ export default function Dashboard({ category = null }) {
               title="Celebrity Posts"
             >
               <Crown className="w-4 h-4" />
-            </Button>
-            
-            <Button
-              data-testid="rewards-link"
-              onClick={() => navigate("/rewards")}
-              variant="ghost"
-              size="icon"
-              className="rounded-full"
-              title="Rewards & Payouts"
-            >
-              <Wallet className="w-4 h-4" />
             </Button>
             
             <Button
