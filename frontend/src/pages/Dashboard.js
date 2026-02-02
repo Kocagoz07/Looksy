@@ -83,6 +83,24 @@ export default function Dashboard({ category = null }) {
     }
   };
 
+  const handleSearch = async () => {
+    if (!searchQuery.trim()) return;
+    
+    setSearching(true);
+    try {
+      const response = await axios.get(
+        `${BACKEND_URL}/api/users/search?q=${encodeURIComponent(searchQuery)}`,
+        { withCredentials: true }
+      );
+      setSearchResults(response.data.users || []);
+    } catch (err) {
+      console.error("Search error:", err);
+      toast.error("Search failed");
+    } finally {
+      setSearching(false);
+    }
+  };
+
   const getThemeClass = () => {
     if (activeTab === "men") return "theme-men";
     if (activeTab === "women") return "theme-women";
