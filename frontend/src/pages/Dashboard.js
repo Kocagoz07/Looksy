@@ -1,8 +1,15 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import axios from "axios";
-import { Spade, Heart, Star, Plus, User, LogOut, Upload, Bookmark, Crown, Wallet } from "lucide-react";
+import { Spade, Heart, Star, Plus, User, LogOut, Search, Crown, Compass } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import PostCard from "@/components/PostCard";
 import { toast } from "sonner";
 
@@ -14,6 +21,10 @@ export default function Dashboard({ category = null }) {
   const [posts, setPosts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState(category || "all");
+  const [searchQuery, setSearchQuery] = useState("");
+  const [searchResults, setSearchResults] = useState([]);
+  const [showSearchDialog, setShowSearchDialog] = useState(false);
+  const [searching, setSearching] = useState(false);
 
   useEffect(() => {
     fetchCurrentUser();
