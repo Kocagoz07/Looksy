@@ -336,39 +336,50 @@ export default function UserProfile() {
             <div className="flex flex-wrap items-center justify-center sm:justify-start gap-3">
               {isOwnProfile ? (
                 <>
+                  {/* Total Earnings - Only visible to owner */}
                   <div 
-                    className="px-6 py-3 rounded-lg border border-white border-opacity-20 cursor-pointer hover:border-opacity-40 transition-all" 
-                    style={{ backgroundColor: 'transparent' }}
+                    className="px-5 py-3 rounded-xl border border-opacity-20" 
+                    style={{ borderColor: textColor, backgroundColor: 'rgba(255,255,255,0.05)' }}
                     data-testid="earnings-box"
-                    onClick={() => navigate('/payouts')}
                   >
-                    <div className="flex items-center gap-2 mb-1">
-                      <DollarSign className="w-4 h-4" style={{ color: '#FFFFFF' }} />
-                      <p className="font-manrope text-xs font-semibold" style={{ color: '#FFFFFF' }}>Total Earnings</p>
-                    </div>
-                    <p className="font-italiana text-2xl" style={{ color: '#FFFFFF' }}>
+                    <p className="font-manrope text-xs opacity-70 mb-1">Total Earnings</p>
+                    <p className="font-italiana text-2xl">
                       €{user.earnings_eur?.toFixed(2) || '0.00'}
-                    </p>
-                    <p className="font-manrope text-xs opacity-70" style={{ color: '#FFFFFF' }}>
-                      ${user.earnings?.toFixed(2) || '0.00'} USD
                     </p>
                   </div>
                   
-                  {user.kyc_verified && (
-                    <div className="flex items-center gap-2 px-4 py-2 bg-green-600 rounded-lg">
-                      <CheckCircle className="w-4 h-4 text-white" />
-                      <span className="font-manrope text-xs font-semibold text-white">Verified</span>
+                  {/* Stars */}
+                  <div 
+                    className="px-5 py-3 rounded-xl border border-opacity-20" 
+                    style={{ borderColor: textColor, backgroundColor: 'rgba(255,255,255,0.05)' }}
+                  >
+                    <p className="font-manrope text-xs opacity-70 mb-1">Stars</p>
+                    <div className="flex items-center gap-2">
+                      <Star className="w-5 h-5 text-yellow-400 fill-yellow-400" />
+                      <p className="font-italiana text-2xl">{rewardsInfo?.stars || 0}</p>
+                    </div>
+                  </div>
+                  
+                  {/* Payout Points */}
+                  <div 
+                    className="px-5 py-3 rounded-xl cursor-pointer hover:bg-white/10 transition-colors" 
+                    style={{ backgroundColor: 'rgba(255,255,255,0.05)', border: `1px solid ${textColor}20` }}
+                    onClick={() => navigate('/rewards')}
+                    data-testid="rewards-box"
+                  >
+                    <p className="font-manrope text-xs opacity-70 mb-1">Payout Balance</p>
+                    <p className="font-italiana text-2xl">€{rewardsInfo?.payout_points_eur?.toFixed(2) || '0.00'}</p>
+                    <p className="font-manrope text-xs opacity-50 mt-1 flex items-center gap-1">
+                      <Wallet className="w-3 h-3" /> Tap to manage
+                    </p>
+                  </div>
+                  
+                  {rewardsInfo?.kyc_verified && (
+                    <div className="flex items-center gap-1 px-3 py-1.5 bg-green-600/80 rounded-full">
+                      <Shield className="w-3 h-3 text-white" />
+                      <span className="font-manrope text-xs text-white">KYC Verified</span>
                     </div>
                   )}
-                  
-                  <Button
-                    onClick={() => navigate('/payouts')}
-                    className="px-6 py-3 rounded-lg font-manrope font-semibold flex items-center gap-2"
-                    style={{ backgroundColor: '#013220', color: '#FFFFFF' }}
-                  >
-                    <Wallet className="w-4 h-4" />
-                    Payouts
-                  </Button>
                 </>
               ) : (
                 <>
@@ -397,51 +408,40 @@ export default function UserProfile() {
                     )}
                   </Button>
                   
-                  {/* Collaboration Box for Other Users */}
-                  <div 
-                    className="cursor-pointer group"
+                  {/* Simple Collaborate Button */}
+                  <Button
                     onClick={() => setCollaborateOpen(true)}
-                    data-testid="collaborate-box"
+                    className="px-6 py-3 rounded-full font-manrope font-semibold flex items-center gap-2"
+                    style={{ backgroundColor: '#013220', color: '#FFFFFF' }}
+                    data-testid="collaborate-btn"
                   >
-                    <div 
-                      className="px-8 py-4 rounded-xl transition-all hover:shadow-lg relative overflow-hidden"
-                      style={{ backgroundColor: '#013220' }}
-                    >
-                      {/* Decorative Background Pattern */}
-                      <div className="absolute inset-0 opacity-5">
-                        <div className="absolute top-0 right-0 w-20 h-20 bg-white rounded-full -translate-y-1/2 translate-x-1/2"></div>
-                        <div className="absolute bottom-0 left-0 w-16 h-16 bg-white rounded-full translate-y-1/2 -translate-x-1/2"></div>
-                      </div>
-                      
-                      <div className="relative z-10">
-                        <div className="flex items-center gap-3 mb-2">
-                          <MessageSquare className="w-6 h-6 text-white" />
-                          <h3 className="font-italiana text-xl text-white">Collaborate</h3>
-                        </div>
-                        <p className="font-manrope text-sm text-white opacity-90 mb-3">
-                          Partner with {user.name.split(' ')[0]} for your next project
-                        </p>
-                        <div className="flex items-center gap-2 text-white opacity-75 group-hover:opacity-100 transition-opacity">
-                          <span className="font-manrope text-xs font-semibold">Send Message</span>
-                          <Send className="w-4 h-4" />
-                        </div>
-                      </div>
-                    </div>
-                  </div>
+                    <MessageSquare className="w-4 h-4" />
+                    Collaborate
+                  </Button>
                 </>
               )}
             </div>
           </div>
         </div>
 
-        {/* AI-Powered Collaboration Hub - Own Profile Only */}
-        {isOwnProfile && (
-          <div className="mb-8" data-testid="collaboration-hub-section">
-            <CollaborationHub 
-              userId={userId} 
-              textColor={textColor} 
-              bgColor={bgColor}
-            />
+        {/* Accepted Collaborations - Shown on profile */}
+        {acceptedCollabs.length > 0 && (
+          <div className="mb-8">
+            <h3 className="font-italiana text-xl mb-4 flex items-center gap-2">
+              <CheckCircle className="w-5 h-5 text-green-400" />
+              Active Collaborations
+            </h3>
+            <div className="flex flex-wrap gap-2">
+              {acceptedCollabs.map((collab) => (
+                <Badge 
+                  key={collab.message_id}
+                  className="px-3 py-1.5 font-manrope text-sm"
+                  style={{ backgroundColor: 'rgba(255,255,255,0.1)', color: textColor }}
+                >
+                  {collab.from_user_name || collab.to_user_name}
+                </Badge>
+              ))}
+            </div>
           </div>
         )}
 
