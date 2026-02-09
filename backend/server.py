@@ -1120,6 +1120,60 @@ async def mark_message_read(request: Request, message_id: str):
     
     return {"message": "Message marked as read"}
 
+@api_router.post("/collaborations/{message_id}/accept")
+async def accept_collaboration(request: Request, message_id: str):
+    """Accept a collaboration request"""
+    user = await get_current_user(request)
+    if not user:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    
+    result = await db.collaboration_messages.update_one(
+        {"message_id": message_id, "to_user_id": user.user_id},
+        {"$set": {"status": "accepted", "accepted_at": datetime.now(timezone.utc).isoformat()}}
+    )
+    
+    if result.modified_count == 0:
+        raise HTTPException(status_code=404, detail="Collaboration not found")
+    
+    return {"message": "Collaboration accepted"}
+
+@api_router.post("/collaborations/{message_id}/decline")
+async def decline_collaboration(request: Request, message_id: str):
+    """Decline a collaboration request"""
+    user = await get_current_user(request)
+    if not user:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    
+    result = await db.collaboration_messages.update_one(
+        {"message_id": message_id, "to_user_id": user.user_id},
+        {"$set": {"status": "declined"}}
+    )
+    
+    if result.modified_count == 0:
+        raise HTTPException(status_code=404, detail="Collaboration not found")
+    
+    return {"message": "Collaboration declined"}
+
+@api_router.get("/collaborations/accepted")
+async def get_accepted_collaborations(request: Request):
+    """Get user's accepted collaborations to show on profile"""
+    user = await get_current_user(request)
+    if not user:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    
+    # Get both sent and received accepted collaborations
+    collaborations = await db.collaboration_messages.find(
+        {
+            "$or": [
+                {"to_user_id": user.user_id, "status": "accepted"},
+                {"from_user_id": user.user_id, "status": "accepted"}
+            ]
+        },
+        {"_id": 0}
+    ).sort("accepted_at", -1).to_list(20)
+    
+    return {"collaborations": collaborations}
+
 # AI-powered collaboration analysis endpoints
 @api_router.post("/collaborations/ai/analyze")
 async def analyze_collaboration(request: Request, analysis_req: AIAnalysisRequest):
