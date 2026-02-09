@@ -58,6 +58,24 @@ export default function UserProfile() {
       if (currentUserRes.data.following) {
         setIsFollowing(currentUserRes.data.following.includes(userId));
       }
+      
+      // Fetch rewards info if own profile
+      if (currentUserRes.data.user_id === userId) {
+        try {
+          const rewardsRes = await axios.get(`${BACKEND_URL}/api/rewards/info`, { withCredentials: true });
+          setRewardsInfo(rewardsRes.data);
+        } catch (err) {
+          console.error("Error fetching rewards:", err);
+        }
+        
+        // Fetch accepted collaborations
+        try {
+          const collabRes = await axios.get(`${BACKEND_URL}/api/collaborations/accepted`, { withCredentials: true });
+          setAcceptedCollabs(collabRes.data.collaborations || []);
+        } catch (err) {
+          console.error("Error fetching accepted collabs:", err);
+        }
+      }
     } catch (err) {
       console.error("Error fetching profile:", err);
       toast.error("Failed to load profile");
