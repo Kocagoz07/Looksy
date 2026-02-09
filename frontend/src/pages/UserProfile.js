@@ -225,16 +225,29 @@ export default function UserProfile() {
           <h1 className="font-italiana text-2xl">Profile</h1>
         </div>
         
-        {/* Add Post Button */}
+        {/* Action Buttons */}
         {isOwnProfile && (
-          <Button
-            data-testid="add-post-btn"
-            onClick={() => navigate('/upload')}
-            className="rounded-full w-12 h-12 flex items-center justify-center"
-            style={{ backgroundColor: textColor === '#FFFFFF' ? '#FFFFFF' : '#000000', color: bgColor }}
-          >
-            <Plus className="w-6 h-6" />
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button
+              data-testid="favorites-btn"
+              onClick={() => navigate('/favorites')}
+              variant="ghost"
+              size="icon"
+              className="rounded-full"
+              style={{ color: textColor }}
+              title="My Favorites"
+            >
+              <Bookmark className="w-5 h-5" />
+            </Button>
+            <Button
+              data-testid="add-post-btn"
+              onClick={() => navigate('/upload')}
+              className="rounded-full w-10 h-10 flex items-center justify-center"
+              style={{ backgroundColor: textColor === '#FFFFFF' ? '#FFFFFF' : '#000000', color: bgColor }}
+            >
+              <Plus className="w-5 h-5" />
+            </Button>
+          </div>
         )}
       </header>
 
