@@ -446,6 +446,15 @@ export default function UserProfile() {
           </div>
         )}
 
+        {/* Minimalist Collaboration Requests - Own Profile Only */}
+        {isOwnProfile && (
+          <CollaborationHub 
+            userId={userId} 
+            textColor={textColor} 
+            bgColor={bgColor}
+          />
+        )}
+
         {/* Posts Grid */}
         <div>
           <h3 className="font-italiana text-2xl mb-6">Posts</h3>
