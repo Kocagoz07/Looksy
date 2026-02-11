@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { ArrowLeft, DollarSign, Camera, Edit2, Send, Plus, MessageSquare, UserPlus, UserCheck, Bookmark, Star, Wallet, CheckCircle, Shield } from "lucide-react";
+import { ArrowLeft, Camera, Edit2, Send, Plus, MessageSquare, UserPlus, UserCheck, Bookmark, Star, Wallet, CheckCircle, Shield } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
@@ -14,6 +14,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import PostCard from "@/components/PostCard";
+import CollaborationHub from "@/components/CollaborationHub";
 import axios from "axios";
 import { toast } from "sonner";
 
