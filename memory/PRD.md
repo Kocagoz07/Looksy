@@ -30,103 +30,83 @@ Build a fashion social media application named "Looksy" similar to Instagram wit
 - Editable bio section
 - Followers/Following counts with follow functionality
 - Private "Total Earnings" box (visible only to profile owner)
-- **AI-powered Collaboration Hub** for managing collaboration requests
+- **Rewards section** with Stars, Payout Balance, KYC status
+- **Minimalist Collaboration Hub** with accept/decline functionality
 
 ### Posts & Engagement
 - Upload high-quality photos (1080x1080)
 - Posts can include: music links, location, product information with links and total price
-- Engagement: Comments (with delete for post owner), Likes, Stars
+- Engagement: Comments (with delete for post owner), Likes, Stars, **Favorites (Bookmark)**
 - Delete button with confirmation for post owner
 
 ### Monetization Features
 - "Star" category tab for posts with 10,000+ likes
-- Earnings based on likes:
-  - 0-1000 likes: $0.05 per like
-  - 1000-3000 likes: $0.10 per like
-  - 3000-10000 likes: $0.20 per like
-  - 10000+ likes: $0.50 per like
+- Earnings based on stars (per post, max 10,000):
+  - 1-1000 stars: $0.0005 per star (0.05 cents)
+  - 1001-5000 stars: $0.001 per star (0.10 cents)
+  - 5001-10000 stars: $0.002 per star (0.20 cents)
 - Dual currency display (USD and EUR) with automatic conversion
-- Payout system with KYC verification, minimum €20 threshold
+- Payout system with KYC verification, minimum €20 threshold (Stripe + PayPal)
 
 ---
 
 ## What's Been Implemented
 
-### Session: January 17, 2026
+### Session: February 21, 2026
 
-**Completed:**
-1. **Dual Authentication System (P0)**
-   - Magic link authentication with email sending
-   - Email/password registration and login
-   - Session management with secure cookies
-   - CORS properly configured for credentials
+**Completed UI/UX Updates:**
+1. **Dashboard "Discover" Tab** - Renamed from "All" with compass icon
+2. **User Search** - Search dialog to find other users by name/email
+3. **Profile Favorites Button** - Moved to header next to Add Post button
+4. **Simplified Profile** - Removed payout button, integrated rewards section
+5. **Minimalist Collaboration Section** - Collapsible with accept/decline buttons
+6. **Accepted Collaborations on Profile** - Shows as badges when accepted
+7. **Owner-only Earnings** - Total Earnings only visible to profile owner
 
-2. **AI-Powered Collaboration Hub (P0) - FULLY IMPLEMENTED**
-   - Integrated GPT-4o-mini via Emergent LLM Key
-   - **AI Features:**
-     - Smart request analysis with summary generation
-     - AI-detected request type (Brand Partnership, Influencer Collab, Editorial, Photo Shoot)
-     - AI priority scoring (High/Medium/Low)
-     - Recommended action items
-     - AI-generated reply suggestions with 3 tone options (Professional, Friendly, Brief)
-     - Batch analysis of all unread messages
-     - Click-to-copy reply functionality
-   - Search and filter functionality
-   - Tabs for All/Unread/Read messages
-   - Stats dashboard (Total, Unread, Priority counts)
+**Backend Endpoints Added:**
+- `/api/users/search` - Search users by name or email
+- `/api/collaborations/{id}/accept` - Accept collaboration request
+- `/api/collaborations/{id}/decline` - Decline collaboration request
+- `/api/collaborations/accepted` - Get accepted collaborations
 
-3. **Backend AI Endpoints:**
-   - `/api/collaborations/ai/analyze` - Analyze single collaboration
-   - `/api/collaborations/ai/suggest-reply` - Generate reply suggestions
-   - `/api/collaborations/ai/batch-analyze` - Analyze all unread messages
+### Previous Sessions
 
-4. **User Profile Features**
-   - Gender-based profile styling (black for men, dark red for women)
-   - Bio editing
-   - Profile picture upload
-   - Earnings display (USD and EUR)
-   - Follow/Unfollow functionality
-
-5. **Core Backend APIs**
-   - All auth endpoints
-   - User endpoints
-   - Post endpoints
-   - Collaboration endpoints
-   - Comment endpoints
-
-6. **Testing**
-   - 21 backend API tests (100% pass rate)
-   - Frontend UI flow tests (all passed)
-   - Test file: `/app/tests/test_looksy_api.py`
-
-**Bug Fixes:**
-- Fixed ObjectId serialization in registration endpoint
-- Fixed CORS configuration for credentials mode
-- Fixed escaped quotes in CollaborationHub.js
-- Fixed category filter query typo (" category" → "category")
+**Completed Features:**
+1. **Dual Authentication System**
+2. **AI-Powered Collaboration Hub** (GPT-4o-mini)
+3. **User Profile Features** (bio, picture, follow system)
+4. **Rewards System** (Stars → Payout Points conversion)
+5. **KYC Verification**
+6. **Payout Integration** (Stripe + PayPal - MOCKED)
+7. **Favorites Feature**
+8. **Celebrity Stars Page**
 
 ---
 
 ## Prioritized Backlog
 
-### P0 - High Priority (Next Steps)
-- [x] ~~AI-powered Collaboration Hub~~ ✅ COMPLETED
-- [ ] Affiliate/Rewards System: Stars → Payout Points conversion logic
+### P0 - Completed ✅
+- [x] Dual authentication
+- [x] AI Collaboration Hub
+- [x] Rewards system
+- [x] Favorites feature
+- [x] Celebrity page
+- [x] User search
+- [x] Minimalist collaboration UI
 
 ### P1 - Medium Priority
-- [ ] Full Payout Integration with Stripe/PayPal
-- [ ] KYC verification workflow
-- [ ] Real currency conversion API (currently hardcoded rate)
+- [ ] Real Stripe/PayPal integration (currently mocked)
+- [ ] Real currency conversion API (currently hardcoded)
+- [ ] Email sending for magic links (currently dev mode)
 
 ### P2 - Lower Priority
-- [ ] Favorites Feature: Bookmark posts, view in profile
-- [ ] "Star" Celebrity Tab: Dedicated page for posts with 10,000+ likes
-- [ ] Real-time notifications for likes, comments, collaborations
+- [ ] Real-time notifications
+- [ ] Post scheduling
+- [ ] Analytics dashboard
 
 ### P3 - Future/Technical Debt
-- [ ] Refactor server.py into modular routers (auth.py, users.py, posts.py)
+- [ ] Refactor server.py into modular routers
 - [ ] Refactor UserProfile.js into smaller components
-- [ ] Add email sending for magic links (currently dev mode)
 
 ---
 
@@ -140,14 +120,13 @@ Build a fashion social media application named "Looksy" similar to Instagram wit
 - **AI Integration:** GPT-4o-mini via Emergent LLM Key
 
 ### Key Files
-- `/app/backend/server.py` - Main API server with AI endpoints
-- `/app/frontend/src/pages/LandingPage.js` - Dual auth login page
-- `/app/frontend/src/pages/UserProfile.js` - Profile with CollaborationHub
-- `/app/frontend/src/components/CollaborationHub.js` - AI-powered collaboration management
+- `/app/backend/server.py` - Main API server
+- `/app/frontend/src/pages/Dashboard.js` - Discover feed, search
+- `/app/frontend/src/pages/UserProfile.js` - Profile with rewards section
+- `/app/frontend/src/components/CollaborationHub.js` - Minimalist collaboration UI
 
 ### Third-Party Integrations
 - **Emergent LLM Key:** Universal key for GPT-4o-mini AI features
-- **Resend:** For sending magic link emails (placeholder key)
 - **Google Fonts:** Italiana font family
 - **bcrypt:** Password hashing
 
@@ -158,6 +137,7 @@ Build a fashion social media application named "Looksy" similar to Instagram wit
 ---
 
 ## Mocked/Placeholder Features
-- Currency conversion: Uses hardcoded rate (USD_TO_EUR_RATE=0.92)
-- Payout system: Placeholder endpoints without real payment provider
-- Email sending: Magic links returned in response (dev mode)
+- **Stripe/PayPal payouts:** Deducts points but no real transfer
+- **KYC verification:** Auto-approves without real identity check
+- **Currency conversion:** Uses hardcoded rate (0.92)
+- **Email sending:** Magic links returned in response (dev mode)
