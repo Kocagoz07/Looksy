@@ -36,6 +36,16 @@ fs = gridfs.GridFS(sync_db)
 # Create the main app without a prefix
 app = FastAPI()
 
+# Add CORS middleware FIRST (before routes)
+cors_origins = os.environ.get('CORS_ORIGINS', 'http://localhost:3000').split(',')
+app.add_middleware(
+    CORSMiddleware,
+    allow_credentials=True,
+    allow_origins=cors_origins,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
 # Create a router with the /api prefix
 api_router = APIRouter(prefix="/api")
 
