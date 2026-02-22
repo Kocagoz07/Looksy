@@ -297,7 +297,7 @@ export default function Dashboard({ category = null }) {
           </div>
         ) : posts.length === 0 ? (
           <div className="text-center py-20">
-            <Upload className="w-16 h-16 mx-auto mb-4 opacity-30" />
+            <Plus className="w-16 h-16 mx-auto mb-4 opacity-30" />
             <p className="font-manrope text-lg opacity-70">No posts yet</p>
             <p className="font-manrope text-sm opacity-50 mt-2">Be the first to share your style!</p>
           </div>
