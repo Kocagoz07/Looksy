@@ -363,10 +363,15 @@ export default function RewardsPage() {
                 {starsToConvert && parseInt(starsToConvert) > 0 && (
                   <div className="bg-green-50 rounded-xl p-4">
                     <p className="font-manrope text-sm text-green-700">
-                      You'll receive: <span className="font-bold">
-                        ${calculatePayout(parseInt(starsToConvert)).toFixed(4)} USD
-                      </span> ({" "}
-                      €{(calculatePayout(parseInt(starsToConvert)) * 0.92).toFixed(4)} EUR)
+                      You'll receive: <span className="font-bold text-lg">
+                        €{calculatePayout(parseInt(starsToConvert)).toFixed(2)}
+                      </span>
+                    </p>
+                    <p className="font-manrope text-xs text-green-600 mt-1">
+                      {parseInt(starsToConvert)} stars × €{
+                        parseInt(starsToConvert) <= 1000 ? '0.05' : 
+                        parseInt(starsToConvert) <= 5000 ? '0.10' : '0.25'
+                      } per star
                     </p>
                   </div>
                 )}
