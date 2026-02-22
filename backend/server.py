@@ -249,35 +249,29 @@ def calculate_earnings(likes_count: int) -> float:
         return 1000 * 0.05 + 2000 * 0.10 + 7000 * 0.20 + (likes_count - 10000) * 0.50
 
 # Helper function to calculate payout points from stars
-# 1-1000 stars: $0.0005 per star (0.05 cents)
-# 1000-5000 stars: $0.001 per star (0.10 cents)
-# 5000-10000 stars: $0.002 per star (0.20 cents)
+# Uses flat rate based on tier (in EUR):
+# 0-1000 stars: €0.05 per star
+# 1001-5000 stars: €0.10 per star
+# 5001-10000 stars: €0.25 per star
 # Max 10,000 stars per post
 def calculate_payout_points(stars: int) -> float:
-    """Convert stars to payout points (USD value)"""
+    """Convert stars to payout points (EUR value) - flat rate per tier"""
     if stars <= 0:
         return 0.0
     
     # Cap at 10,000 stars
     stars = min(stars, 10000)
     
-    points = 0.0
-    
-    # First 1000 stars: $0.0005 each (0.05 cents)
-    first_tier = min(stars, 1000)
-    points += first_tier * 0.0005
-    
-    # 1001-5000 stars: $0.001 each (0.10 cents)
-    if stars > 1000:
-        second_tier = min(stars - 1000, 4000)
-        points += second_tier * 0.001
-    
-    # 5001-10000 stars: $0.002 each (0.20 cents)
-    if stars > 5000:
-        third_tier = min(stars - 5000, 5000)
-        points += third_tier * 0.002
-    
-    return round(points, 4)
+    # Determine tier and apply flat rate
+    if stars <= 1000:
+        # Tier 1: 0-1000 stars → €0.05 per star
+        return round(stars * 0.05, 2)
+    elif stars <= 5000:
+        # Tier 2: 1001-5000 stars → €0.10 per star (flat rate for ALL stars)
+        return round(stars * 0.10, 2)
+    else:
+        # Tier 3: 5001-10000 stars → €0.25 per star (flat rate for ALL stars)
+        return round(stars * 0.25, 2)
 
 # Auth helper
 async def get_current_user(request: Request) -> Optional[User]:
