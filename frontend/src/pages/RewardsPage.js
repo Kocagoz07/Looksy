@@ -652,24 +652,20 @@ export default function RewardsPage() {
   );
 }
 
-// Helper function to calculate payout locally (matches backend)
+// Helper function to calculate payout locally (matches backend - flat rate per tier in EUR)
 function calculatePayout(stars) {
   if (stars <= 0) return 0;
   stars = Math.min(stars, 10000);
   
-  let points = 0;
-  const firstTier = Math.min(stars, 1000);
-  points += firstTier * 0.0005;
-  
-  if (stars > 1000) {
-    const secondTier = Math.min(stars - 1000, 4000);
-    points += secondTier * 0.001;
+  // Flat rate based on which tier the total falls into
+  if (stars <= 1000) {
+    // Tier 1: 0-1000 stars → €0.05 per star
+    return stars * 0.05;
+  } else if (stars <= 5000) {
+    // Tier 2: 1001-5000 stars → €0.10 per star (flat rate for ALL stars)
+    return stars * 0.10;
+  } else {
+    // Tier 3: 5001-10000 stars → €0.25 per star (flat rate for ALL stars)
+    return stars * 0.25;
   }
-  
-  if (stars > 5000) {
-    const thirdTier = Math.min(stars - 5000, 5000);
-    points += thirdTier * 0.002;
-  }
-  
-  return points;
 }
