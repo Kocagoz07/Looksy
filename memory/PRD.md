@@ -41,11 +41,10 @@ Build a fashion social media application named "Looksy" similar to Instagram wit
 
 ### Monetization Features
 - "Star" category tab for posts with 10,000+ likes
-- Earnings based on stars (per post, max 10,000):
-  - 1-1000 stars: $0.0005 per star (0.05 cents)
-  - 1001-5000 stars: $0.001 per star (0.10 cents)
-  - 5001-10000 stars: $0.002 per star (0.20 cents)
-- Dual currency display (USD and EUR) with automatic conversion
+- Earnings based on stars (per post, max 10,000) - **FLAT RATE PER TIER IN EUR**:
+  - 0-1000 stars: €0.05 per star (e.g., 500 stars = €25)
+  - 1001-5000 stars: €0.10 per star (e.g., 3000 stars = €300)
+  - 5001-10000 stars: €0.25 per star (e.g., 10000 stars = €2500)
 - Payout system with KYC verification, minimum €20 threshold (Stripe + PayPal)
 
 ---
