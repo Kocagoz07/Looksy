@@ -234,22 +234,22 @@ export default function RewardsPage() {
             <p className="font-italiana text-4xl mb-1">{rewardsInfo?.stars || 0}</p>
             <p className="font-manrope text-sm text-white/80">Stars Earned</p>
             <p className="font-manrope text-xs mt-2 text-white/60">
-              Worth ${rewardsInfo?.potential_conversion_value_usd?.toFixed(4) || '0.00'}
+              Worth €{rewardsInfo?.potential_conversion_value_eur?.toFixed(2) || '0.00'}
             </p>
           </div>
 
           {/* Payout Points */}
           <div className="bg-gradient-to-br from-green-400 to-emerald-500 rounded-2xl p-6 text-white">
             <div className="flex items-center justify-between mb-4">
-              <DollarSign className="w-8 h-8" />
-              <Badge className="bg-white/20 text-white">Convertible</Badge>
+              <Euro className="w-8 h-8" />
+              <Badge className="bg-white/20 text-white">Balance</Badge>
             </div>
             <p className="font-italiana text-4xl mb-1">
               €{rewardsInfo?.payout_points_eur?.toFixed(2) || '0.00'}
             </p>
-            <p className="font-manrope text-sm text-white/80">Payout Points</p>
+            <p className="font-manrope text-sm text-white/80">Payout Balance</p>
             <p className="font-manrope text-xs mt-2 text-white/60">
-              ${rewardsInfo?.payout_points_usd?.toFixed(2) || '0.00'} USD
+              Min. €20 to withdraw
             </p>
           </div>
 
@@ -263,9 +263,6 @@ export default function RewardsPage() {
               €{rewardsInfo?.earnings_eur?.toFixed(2) || '0.00'}
             </p>
             <p className="font-manrope text-sm text-white/80">Total Earnings</p>
-            <p className="font-manrope text-xs mt-2 text-white/60">
-              ${rewardsInfo?.earnings_usd?.toFixed(2) || '0.00'} USD
-            </p>
           </div>
         </div>
 
