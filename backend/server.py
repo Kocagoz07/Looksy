@@ -1497,8 +1497,8 @@ async def convert_stars_to_points(request: Request, convert_req: ConvertStarsReq
     if convert_req.stars_to_convert > current_stars:
         raise HTTPException(status_code=400, detail=f"Insufficient stars. You have {current_stars} stars.")
     
-    # Calculate payout points value
-    points_value = calculate_payout_points(convert_req.stars_to_convert)
+    # Calculate payout points value (now returns EUR directly)
+    points_value_eur = calculate_payout_points(convert_req.stars_to_convert)
     
     # Update user's stars and payout points
     await db.users.update_one(
@@ -1506,7 +1506,7 @@ async def convert_stars_to_points(request: Request, convert_req: ConvertStarsReq
         {
             "$inc": {
                 "stars": -convert_req.stars_to_convert,
-                "payout_points": points_value
+                "payout_points": points_value_eur
             }
         }
     )
@@ -1517,11 +1517,9 @@ async def convert_stars_to_points(request: Request, convert_req: ConvertStarsReq
     return {
         "message": "Stars converted successfully",
         "stars_converted": convert_req.stars_to_convert,
-        "points_earned_usd": points_value,
-        "points_earned_eur": usd_to_eur(points_value),
+        "points_earned_eur": points_value_eur,
         "remaining_stars": updated_user.get("stars", 0),
-        "total_payout_points_usd": updated_user.get("payout_points", 0.0),
-        "total_payout_points_eur": usd_to_eur(updated_user.get("payout_points", 0.0))
+        "total_payout_points_eur": updated_user.get("payout_points", 0.0)
     }
 
 # ================= KYC VERIFICATION =================
