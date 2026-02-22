@@ -1457,29 +1457,27 @@ async def get_rewards_info(request: Request):
     earnings = user_doc.get("earnings", 0.0) if user_doc else 0.0
     earnings_eur = user_doc.get("earnings_eur", 0.0) if user_doc else 0.0
     
-    # Calculate potential conversion value
-    potential_value = calculate_payout_points(stars)
+    # Calculate potential conversion value (now returns EUR directly)
+    potential_value_eur = calculate_payout_points(stars)
     
     # Min payout threshold
     min_threshold = float(os.environ.get('MIN_PAYOUT_THRESHOLD_EUR', '20.0'))
     
     return {
         "stars": stars,
-        "payout_points_usd": payout_points,
-        "payout_points_eur": usd_to_eur(payout_points),
-        "earnings_usd": earnings,
+        "payout_points_eur": payout_points,  # Already in EUR
         "earnings_eur": earnings_eur,
-        "potential_conversion_value_usd": potential_value,
-        "potential_conversion_value_eur": usd_to_eur(potential_value),
+        "potential_conversion_value_eur": potential_value_eur,
         "kyc_verified": user_doc.get("kyc_verified", False) if user_doc else False,
         "payout_method": user_doc.get("payout_method") if user_doc else None,
         "min_payout_threshold_eur": min_threshold,
         "can_request_payout": payout_points >= min_threshold,
         "conversion_rates": {
-            "tier1": {"range": "1-1000 stars", "rate_usd": 0.0005, "rate_cents": 0.05},
-            "tier2": {"range": "1001-5000 stars", "rate_usd": 0.001, "rate_cents": 0.10},
-            "tier3": {"range": "5001-10000 stars", "rate_usd": 0.002, "rate_cents": 0.20},
-            "max_stars_per_post": 10000
+            "tier1": {"range": "0-1000 stars", "rate_eur": 0.05, "description": "€0.05 per star"},
+            "tier2": {"range": "1001-5000 stars", "rate_eur": 0.10, "description": "€0.10 per star"},
+            "tier3": {"range": "5001-10000 stars", "rate_eur": 0.25, "description": "€0.25 per star"},
+            "max_stars_per_post": 10000,
+            "note": "Flat rate applies to ALL stars based on tier"
         }
     }
 
