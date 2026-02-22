@@ -301,20 +301,27 @@ export default function RewardsPage() {
             Star Conversion Rates
           </h3>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-            {rewardsInfo?.conversion_rates && Object.entries(rewardsInfo.conversion_rates)
-              .filter(([key]) => key.startsWith('tier'))
-              .map(([key, tier]) => (
-                <div key={key} className="bg-gray-50 rounded-xl p-4">
-                  <p className="font-manrope text-sm text-gray-500 mb-1">{tier.range}</p>
-                  <p className="font-italiana text-2xl text-gray-800">
-                    {tier.rate_cents}¢
-                  </p>
-                  <p className="font-manrope text-xs text-gray-400">per star</p>
-                </div>
-              ))}
+            <div className="bg-gray-50 rounded-xl p-4">
+              <p className="font-manrope text-sm text-gray-500 mb-1">0-1000 stars</p>
+              <p className="font-italiana text-2xl text-gray-800">€0.05</p>
+              <p className="font-manrope text-xs text-gray-400">per star</p>
+            </div>
+            <div className="bg-gray-50 rounded-xl p-4">
+              <p className="font-manrope text-sm text-gray-500 mb-1">1001-5000 stars</p>
+              <p className="font-italiana text-2xl text-gray-800">€0.10</p>
+              <p className="font-manrope text-xs text-gray-400">per star</p>
+            </div>
+            <div className="bg-gray-50 rounded-xl p-4">
+              <p className="font-manrope text-sm text-gray-500 mb-1">5001-10000 stars</p>
+              <p className="font-italiana text-2xl text-gray-800">€0.25</p>
+              <p className="font-manrope text-xs text-gray-400">per star</p>
+            </div>
           </div>
           <p className="font-manrope text-sm text-gray-500">
-            Maximum: {rewardsInfo?.conversion_rates?.max_stars_per_post?.toLocaleString()} stars per post
+            Maximum: 10,000 stars per post • Flat rate applies to ALL stars based on tier
+          </p>
+          <p className="font-manrope text-xs text-gray-400 mt-2">
+            Example: 3000 stars = 3000 × €0.10 = €300
           </p>
         </div>
 
