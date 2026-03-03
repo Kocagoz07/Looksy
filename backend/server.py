@@ -218,6 +218,22 @@ class AIReplyRequest(BaseModel):
     from_user_name: str
     reply_tone: str = "professional"  # professional, friendly, brief
 
+# SMS OTP Models
+class SendOTPRequest(BaseModel):
+    phone_number: str  # E.164 format: +1234567890
+
+class VerifyOTPRequest(BaseModel):
+    phone_number: str
+    otp_code: str
+
+class RegisterWithPhoneRequest(BaseModel):
+    email: str
+    password: str
+    name: str
+    category: str
+    phone_number: str
+    otp_code: str
+
 # Payment Transaction Model
 class PaymentTransaction(BaseModel):
     model_config = ConfigDict(extra="ignore")
