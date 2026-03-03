@@ -23,6 +23,10 @@ Build a fashion social media application named "Looksy" similar to Instagram wit
 - **Dual Login System:**
   - Email Magic Link authentication
   - Traditional email/password registration/login
+- **SMS OTP Verification** (anti-bot protection):
+  - Phone verification required during registration
+  - 6-digit OTP sent via Twilio SMS
+  - Test mode available for development
 - Session-based authentication with secure cookies
 
 ### User Profiles
