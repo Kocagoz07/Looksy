@@ -333,7 +333,209 @@ async def get_current_user(request: Request) -> Optional[User]:
     
     return User(**user_doc)
 
-# Auth endpoints
+# ================= SMS OTP VERIFICATION =================
+
+@api_router.post("/auth/send-otp")
+async def send_otp(request: SendOTPRequest):
+    """Send OTP to phone number for verification"""
+    phone = request.phone_number.strip()
+    
+    # Validate phone format (basic E.164 validation)
+    if not phone.startswith('+') or len(phone) < 10:
+        raise HTTPException(status_code=400, detail="Phone number must be in E.164 format (e.g., +1234567890)")
+    
+    # Check if phone is already registered
+    existing_user = await db.users.find_one({"phone_number": phone}, {"_id": 0})
+    if existing_user:
+        raise HTTPException(status_code=400, detail="Phone number already registered")
+    
+    # Generate 6-digit OTP
+    otp_code = ''.join([str(random.randint(0, 9)) for _ in range(6)])
+    
+    # Store OTP in database with expiry (5 minutes)
+    otp_record = {
+        "phone_number": phone,
+        "otp_code": otp_code,
+        "created_at": datetime.now(timezone.utc).isoformat(),
+        "expires_at": (datetime.now(timezone.utc) + timedelta(minutes=5)).isoformat(),
+        "verified": False,
+        "attempts": 0
+    }
+    
+    # Remove any existing OTP for this phone
+    await db.otp_verifications.delete_many({"phone_number": phone})
+    await db.otp_verifications.insert_one(otp_record)
+    
+    if SMS_TEST_MODE:
+        # Test mode: return OTP in response (for development only)
+        logger.info(f"TEST MODE - OTP for {phone}: {otp_code}")
+        return {
+            "message": "OTP sent successfully",
+            "test_mode": True,
+            "otp_code": otp_code,  # Only in test mode!
+            "expires_in_seconds": 300
+        }
+    else:
+        # Production: Send via Twilio Verify
+        try:
+            verification = twilio_client.verify.v2.services(
+                os.environ.get('TWILIO_VERIFY_SERVICE_SID')
+            ).verifications.create(to=phone, channel="sms")
+            
+            return {
+                "message": "OTP sent successfully",
+                "test_mode": False,
+                "expires_in_seconds": 300
+            }
+        except Exception as e:
+            logger.error(f"Twilio error: {str(e)}")
+            raise HTTPException(status_code=500, detail="Failed to send OTP. Please try again.")
+
+@api_router.post("/auth/verify-otp")
+async def verify_otp(request: VerifyOTPRequest):
+    """Verify OTP code"""
+    phone = request.phone_number.strip()
+    code = request.otp_code.strip()
+    
+    if SMS_TEST_MODE:
+        # Test mode: verify against stored OTP
+        otp_record = await db.otp_verifications.find_one(
+            {"phone_number": phone, "verified": False},
+            {"_id": 0}
+        )
+        
+        if not otp_record:
+            raise HTTPException(status_code=400, detail="No pending OTP for this phone number")
+        
+        # Check expiry
+        expires_at = datetime.fromisoformat(otp_record["expires_at"].replace('Z', '+00:00'))
+        if datetime.now(timezone.utc) > expires_at:
+            raise HTTPException(status_code=400, detail="OTP expired. Please request a new one.")
+        
+        # Check attempts (max 5)
+        if otp_record.get("attempts", 0) >= 5:
+            raise HTTPException(status_code=400, detail="Too many attempts. Please request a new OTP.")
+        
+        # Increment attempts
+        await db.otp_verifications.update_one(
+            {"phone_number": phone},
+            {"$inc": {"attempts": 1}}
+        )
+        
+        if otp_record["otp_code"] != code:
+            raise HTTPException(status_code=400, detail="Invalid OTP code")
+        
+        # Mark as verified
+        await db.otp_verifications.update_one(
+            {"phone_number": phone},
+            {"$set": {"verified": True, "verified_at": datetime.now(timezone.utc).isoformat()}}
+        )
+        
+        return {"valid": True, "message": "Phone number verified"}
+    else:
+        # Production: Verify via Twilio
+        try:
+            verification_check = twilio_client.verify.v2.services(
+                os.environ.get('TWILIO_VERIFY_SERVICE_SID')
+            ).verification_checks.create(to=phone, code=code)
+            
+            if verification_check.status == "approved":
+                # Mark as verified in DB
+                await db.otp_verifications.update_one(
+                    {"phone_number": phone},
+                    {"$set": {"verified": True, "verified_at": datetime.now(timezone.utc).isoformat()}}
+                )
+                return {"valid": True, "message": "Phone number verified"}
+            else:
+                raise HTTPException(status_code=400, detail="Invalid OTP code")
+        except Exception as e:
+            logger.error(f"Twilio verify error: {str(e)}")
+            raise HTTPException(status_code=400, detail="Verification failed. Please try again.")
+
+@api_router.post("/auth/register-with-phone")
+async def register_with_phone(request: RegisterWithPhoneRequest, response: Response):
+    """Register with phone verification (anti-bot protection)"""
+    email = request.email.lower()
+    phone = request.phone_number.strip()
+    
+    # Check if email already exists
+    existing_user = await db.users.find_one({"email": email}, {"_id": 0})
+    if existing_user:
+        raise HTTPException(status_code=400, detail="Email already registered")
+    
+    # Check if phone already exists
+    existing_phone = await db.users.find_one({"phone_number": phone}, {"_id": 0})
+    if existing_phone:
+        raise HTTPException(status_code=400, detail="Phone number already registered")
+    
+    # Verify phone was verified with OTP
+    otp_record = await db.otp_verifications.find_one(
+        {"phone_number": phone, "verified": True},
+        {"_id": 0}
+    )
+    
+    if not otp_record:
+        raise HTTPException(status_code=400, detail="Phone number not verified. Please verify with OTP first.")
+    
+    # Check OTP verification is recent (within 10 minutes)
+    verified_at = datetime.fromisoformat(otp_record["verified_at"].replace('Z', '+00:00'))
+    if datetime.now(timezone.utc) - verified_at > timedelta(minutes=10):
+        raise HTTPException(status_code=400, detail="Phone verification expired. Please verify again.")
+    
+    # Hash password
+    password_hash = pwd_context.hash(request.password)
+    
+    # Create new user with phone
+    user_id = f"user_{uuid.uuid4().hex[:12]}"
+    new_user = User(
+        user_id=user_id,
+        email=email,
+        name=request.name,
+        password_hash=password_hash,
+        category=request.category
+    )
+    
+    user_dict = new_user.model_dump()
+    user_dict["created_at"] = user_dict["created_at"].isoformat()
+    user_dict["phone_number"] = phone
+    user_dict["phone_verified"] = True
+    user_dict["phone_verified_at"] = otp_record["verified_at"]
+    await db.users.insert_one(user_dict)
+    
+    # Clean up OTP record
+    await db.otp_verifications.delete_many({"phone_number": phone})
+    
+    # Create session
+    session_token = f"session_{secrets.token_urlsafe(32)}"
+    session_expires_at = datetime.now(timezone.utc) + timedelta(days=7)
+    
+    session = UserSession(
+        user_id=user_id,
+        session_token=session_token,
+        expires_at=session_expires_at
+    )
+    session_dict = session.model_dump()
+    session_dict["expires_at"] = session_dict["expires_at"].isoformat()
+    session_dict["created_at"] = session_dict["created_at"].isoformat()
+    
+    await db.user_sessions.insert_one(session_dict)
+    
+    # Set cookie
+    response.set_cookie(
+        key="session_token",
+        value=session_token,
+        httponly=True,
+        secure=True,
+        samesite="none",
+        path="/",
+        max_age=7 * 24 * 60 * 60
+    )
+    
+    # Fetch user from DB without _id and password_hash
+    user_doc = await db.users.find_one({"user_id": user_id}, {"_id": 0, "password_hash": 0})
+    return user_doc
+
+# Auth endpoints (legacy - without phone verification)
 @api_router.post("/auth/register")
 async def register_with_password(request: EmailPasswordRegister, response: Response):
     email = request.email.lower()
