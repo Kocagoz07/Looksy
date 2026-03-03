@@ -5,6 +5,7 @@ from starlette.middleware.cors import CORSMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
 import os
 import logging
+import random
 from pathlib import Path
 from pydantic import BaseModel, Field, ConfigDict, EmailStr
 from typing import List, Optional, Dict
@@ -24,6 +25,20 @@ load_dotenv(ROOT_DIR / '.env')
 
 # Password hashing
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+
+# Twilio setup (only import if not in test mode)
+SMS_TEST_MODE = os.environ.get('SMS_TEST_MODE', 'true').lower() == 'true'
+twilio_client = None
+if not SMS_TEST_MODE:
+    try:
+        from twilio.rest import Client as TwilioClient
+        twilio_client = TwilioClient(
+            os.environ.get('TWILIO_ACCOUNT_SID'),
+            os.environ.get('TWILIO_AUTH_TOKEN')
+        )
+    except Exception as e:
+        logging.warning(f"Twilio setup failed: {e}. Using test mode.")
+        SMS_TEST_MODE = True
 
 # MongoDB connection
 mongo_url = os.environ['MONGO_URL']
