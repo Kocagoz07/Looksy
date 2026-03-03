@@ -67,6 +67,9 @@ Build a fashion social media application named "Looksy" similar to Instagram wit
 7. **Owner-only Earnings** - Total Earnings only visible to profile owner
 
 **Backend Endpoints Added:**
+- `/api/auth/send-otp` - Send OTP to phone number
+- `/api/auth/verify-otp` - Verify OTP code
+- `/api/auth/register-with-phone` - Register with verified phone
 - `/api/users/search` - Search users by name or email
 - `/api/collaborations/{id}/accept` - Accept collaboration request
 - `/api/collaborations/{id}/decline` - Decline collaboration request
