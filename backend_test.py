@@ -7,7 +7,7 @@ import subprocess
 import os
 
 class LooksyAPITester:
-    def __init__(self, base_url="https://outfit-social-1.preview.emergentagent.com"):
+    def __init__(self, base_url="https://looksy-brand-badge.preview.emergentagent.com"):
         self.base_url = base_url
         self.session_token = None
         self.user_id = None

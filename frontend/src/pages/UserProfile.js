@@ -15,6 +15,7 @@ import {
 } from "@/components/ui/dialog";
 import PostCard from "@/components/PostCard";
 import CollaborationHub from "@/components/CollaborationHub";
+import BrandVerifiedBadge from "@/components/BrandVerifiedBadge";
 import axios from "axios";
 import { toast } from "sonner";
 
@@ -189,6 +190,25 @@ export default function UserProfile() {
     }
   };
 
+  const handleRequestBrandVerification = async () => {
+    try {
+      const response = await axios.post(
+        `${BACKEND_URL}/api/users/${userId}/brand-verify`,
+        {},
+        { withCredentials: true }
+      );
+      
+      if (response.data.brand_verified) {
+        setUser({ ...user, brand_verified: true });
+        toast.success("Congratulations! You're now Brand Verified!");
+      }
+    } catch (err) {
+      console.error("Error requesting brand verification:", err);
+      const errorMessage = err.response?.data?.detail || "Failed to verify brand status";
+      toast.error(errorMessage);
+    }
+  };
+
   if (loading) {
     return (
       <div className="min-h-screen bg-white flex items-center justify-center">
@@ -281,7 +301,12 @@ export default function UserProfile() {
           
           <div className="flex-1 text-center sm:text-left space-y-4">
             <div>
-              <h2 className="font-italiana text-4xl mb-2">{user.name}</h2>
+              <div className="flex items-center gap-2 justify-center sm:justify-start">
+                <h2 className="font-italiana text-4xl">{user.name}</h2>
+                {user.brand_verified && (
+                  <BrandVerifiedBadge size="lg" />
+                )}
+              </div>
               {user.category && (
                 <p className="font-manrope text-sm opacity-70 capitalize">{user.category}'s Fashion</p>
               )}
@@ -380,6 +405,25 @@ export default function UserProfile() {
                       <Shield className="w-3 h-3 text-white" />
                       <span className="font-manrope text-xs text-white">KYC Verified</span>
                     </div>
+                  )}
+                  
+                  {/* Brand Verification Status/Button */}
+                  {user.brand_verified ? (
+                    <div className="flex items-center gap-2 px-3 py-1.5 rounded-full" style={{ backgroundColor: 'rgba(212, 175, 55, 0.2)', border: '1px solid #D4AF37' }}>
+                      <BrandVerifiedBadge size="sm" />
+                      <span className="font-manrope text-xs" style={{ color: '#D4AF37' }}>Brand Verified</span>
+                    </div>
+                  ) : acceptedCollabs.length > 0 && (
+                    <Button
+                      data-testid="get-brand-verified-btn"
+                      onClick={handleRequestBrandVerification}
+                      className="px-4 py-2 rounded-full font-manrope text-sm font-semibold flex items-center gap-2"
+                      style={{ backgroundColor: '#D4AF37', color: '#000000' }}
+                      title="Get verified as a brand partner"
+                    >
+                      <BrandVerifiedBadge size="xs" />
+                      Get Verified
+                    </Button>
                   )}
                 </>
               ) : (

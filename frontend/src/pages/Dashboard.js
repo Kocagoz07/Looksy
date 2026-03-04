@@ -11,6 +11,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import PostCard from "@/components/PostCard";
+import BrandVerifiedBadge from "@/components/BrandVerifiedBadge";
 import { toast } from "sonner";
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
@@ -274,7 +275,10 @@ export default function Dashboard({ category = null }) {
                       </div>
                     )}
                     <div>
-                      <p className="font-manrope font-semibold">{user.name}</p>
+                      <div className="flex items-center gap-1">
+                        <p className="font-manrope font-semibold">{user.name}</p>
+                        {user.brand_verified && <BrandVerifiedBadge size="xs" />}
+                      </div>
                       <p className="font-manrope text-xs text-gray-500">{user.category || "Fashion"}</p>
                     </div>
                   </div>

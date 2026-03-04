@@ -3,6 +3,7 @@ import { useParams, useNavigate } from "react-router-dom";
 import { ArrowLeft, Heart, Music, MapPin, Star, ExternalLink, MessageCircle, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
+import BrandVerifiedBadge from "@/components/BrandVerifiedBadge";
 import axios from "axios";
 import { toast } from "sonner";
 
@@ -176,7 +177,10 @@ export default function PostDetail() {
                   </div>
                 )}
                 <div>
-                  <p className="font-manrope font-semibold">{user.name}</p>
+                  <div className="flex items-center gap-1">
+                    <p className="font-manrope font-semibold">{user.name}</p>
+                    {user.brand_verified && <BrandVerifiedBadge size="sm" />}
+                  </div>
                   {user.category && (
                     <p className="font-manrope text-xs text-gray-500 capitalize">{user.category}</p>
                   )}

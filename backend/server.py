@@ -87,6 +87,8 @@ class User(BaseModel):
     favorited_posts: List[str] = []
     followers: List[str] = []  # List of user_ids
     following: List[str] = []  # List of user_ids
+    brand_verified: bool = False  # Brand partnership verified badge
+    brand_verified_at: Optional[datetime] = None  # When brand verification was granted
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
 class ProductLink(BaseModel):
@@ -797,7 +799,7 @@ async def search_users(request: Request, q: str = ""):
                 {"email": {"$regex": f"^{q}", "$options": "i"}}
             ]
         },
-        {"_id": 0, "user_id": 1, "name": 1, "picture": 1, "category": 1, "bio": 1}
+        {"_id": 0, "user_id": 1, "name": 1, "picture": 1, "category": 1, "bio": 1, "brand_verified": 1}
     ).limit(20).to_list(20)
     
     return {"users": users}
@@ -1410,6 +1412,73 @@ async def get_accepted_collaborations(request: Request):
     ).sort("accepted_at", -1).to_list(20)
     
     return {"collaborations": collaborations}
+
+# ================= BRAND VERIFICATION =================
+
+@api_router.post("/users/{user_id}/brand-verify")
+async def set_brand_verified(request: Request, user_id: str, verified: bool = True):
+    """
+    Set a user's brand verification status.
+    This is typically triggered when a brand collaboration is accepted and confirmed.
+    For now, this can be self-toggled for testing; in production, it would require admin approval.
+    """
+    current_user = await get_current_user(request)
+    if not current_user:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    
+    # Check if target user exists
+    target_user = await db.users.find_one({"user_id": user_id}, {"_id": 0})
+    if not target_user:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    # For now, allow self-verification or if user has accepted collaborations
+    # In production, this would require admin approval or verified brand partnership
+    if current_user.user_id != user_id:
+        raise HTTPException(status_code=403, detail="Can only modify your own verification status")
+    
+    # Check if user has at least one accepted collaboration to be eligible
+    accepted_collab = await db.collaboration_messages.find_one({
+        "$or": [
+            {"to_user_id": user_id, "status": "accepted"},
+            {"from_user_id": user_id, "status": "accepted"}
+        ]
+    })
+    
+    if verified and not accepted_collab:
+        raise HTTPException(
+            status_code=400, 
+            detail="Brand verification requires at least one accepted collaboration"
+        )
+    
+    update_data = {
+        "brand_verified": verified,
+        "brand_verified_at": datetime.now(timezone.utc).isoformat() if verified else None
+    }
+    
+    await db.users.update_one(
+        {"user_id": user_id},
+        {"$set": update_data}
+    )
+    
+    return {
+        "message": f"Brand verification {'enabled' if verified else 'disabled'}",
+        "brand_verified": verified
+    }
+
+@api_router.get("/users/{user_id}/brand-status")
+async def get_brand_status(user_id: str):
+    """Get a user's brand verification status"""
+    user = await db.users.find_one(
+        {"user_id": user_id}, 
+        {"_id": 0, "brand_verified": 1, "brand_verified_at": 1}
+    )
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    return {
+        "brand_verified": user.get("brand_verified", False),
+        "brand_verified_at": user.get("brand_verified_at")
+    }
 
 # AI-powered collaboration analysis endpoints
 @api_router.post("/collaborations/ai/analyze")
