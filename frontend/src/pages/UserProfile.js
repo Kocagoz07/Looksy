@@ -127,7 +127,7 @@ function PostDetailModal({ post, user, isOpen, onClose, currentUserId, onLike })
       setIsLiked(post.liked_by?.includes(currentUserId));
       setLikesCount(post.likes_count || 0);
     }
-  }, [isOpen, post]);
+  }, [isOpen, post, currentUserId]);
 
   const fetchComments = async () => {
     try {
@@ -165,6 +165,8 @@ function PostDetailModal({ post, user, isOpen, onClose, currentUserId, onLike })
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
       <DialogContent className="max-w-4xl p-0 gap-0 overflow-hidden max-h-[90vh]">
+        {/* Hidden title for accessibility */}
+        <DialogTitle className="sr-only">Post by {user?.name}</DialogTitle>
         <div className="flex flex-col md:flex-row h-full">
           {/* Image */}
           <div className="md:w-[60%] bg-black flex items-center justify-center">
