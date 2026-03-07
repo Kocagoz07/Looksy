@@ -101,11 +101,12 @@ export default function PostCard({ post, currentUserId, onDelete }) {
         onClick={() => navigate(`/post/${post.post_id}`)}
         className="post-card cursor-pointer group"
       >
-        <div className="post-image-container rounded-lg overflow-hidden relative">
+        {/* Square 1:1 aspect ratio image container */}
+        <div className="post-image-container rounded-lg">
           <img
             src={`${BACKEND_URL}/api/images/${post.image_id}`}
             alt={post.caption || "Post"}
-            className="w-full h-full object-cover"
+            loading="lazy"
           />
           
           {isStar && (

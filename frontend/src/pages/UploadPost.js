@@ -125,16 +125,21 @@ export default function UploadPost() {
         <form onSubmit={handleSubmit} className="space-y-6">
           {/* Image Upload */}
           <div>
-            <label className="font-manrope text-sm font-semibold mb-2 block">Image (1080x1080)</label>
+            <label className="font-manrope text-sm font-semibold mb-2 block">
+              Photo <span className="text-gray-500 font-normal">(1:1 square, 1080×1080px recommended)</span>
+            </label>
             <div className="border-2 border-dashed border-gray-300 rounded-lg p-8 text-center">
               {imagePreview ? (
                 <div className="space-y-4">
                   <div className="relative inline-block">
-                    <img
-                      src={imagePreview}
-                      alt="Preview"
-                      className="max-w-sm mx-auto rounded-lg"
-                    />
+                    {/* Square preview container */}
+                    <div className="w-80 h-80 mx-auto rounded-lg overflow-hidden bg-gray-100">
+                      <img
+                        src={imagePreview}
+                        alt="Preview"
+                        className="w-full h-full object-cover object-center"
+                      />
+                    </div>
                     <Button
                       data-testid="delete-image-btn"
                       type="button"
@@ -146,6 +151,9 @@ export default function UploadPost() {
                       <Trash2 className="w-4 h-4" />
                     </Button>
                   </div>
+                  <p className="text-xs text-gray-500 font-manrope">
+                    Image will be cropped to square (1:1) format
+                  </p>
                   <Button
                     type="button"
                     variant="outline"
@@ -166,8 +174,12 @@ export default function UploadPost() {
                     onChange={handleImageChange}
                     className="hidden"
                   />
-                  <Upload className="w-12 h-12 mx-auto mb-4 text-gray-400" />
-                  <p className="font-manrope text-gray-600">Click to upload image</p>
+                  {/* Square upload placeholder */}
+                  <div className="w-64 h-64 mx-auto border-2 border-dashed border-gray-300 rounded-lg flex flex-col items-center justify-center mb-4 bg-gray-50">
+                    <Upload className="w-12 h-12 mb-4 text-gray-400" />
+                    <p className="font-manrope text-gray-600 text-sm">Click to upload</p>
+                    <p className="font-manrope text-gray-400 text-xs mt-1">1:1 square format</p>
+                  </div>
                 </label>
               )}
             </div>

@@ -114,3 +114,60 @@ code {
     border-bottom-color: inherit;
   }
 }
+
+/* Post Image - 1:1 Square Aspect Ratio (1080x1080) */
+@layer components {
+  .post-image-container {
+    position: relative;
+    width: 100%;
+    aspect-ratio: 1 / 1;
+    overflow: hidden;
+    background-color: #f3f4f6;
+  }
+
+  .post-image-container img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    object-position: center;
+  }
+
+  /* Post card in feed - max width for optimal display */
+  .post-card {
+    width: 100%;
+    max-width: 468px;
+  }
+
+  /* Star badge positioning */
+  .star-badge {
+    position: absolute;
+    top: 12px;
+    right: 12px;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    padding: 6px 12px;
+    background: linear-gradient(135deg, #FFD700 0%, #FFA500 100%);
+    color: #000;
+    border-radius: 9999px;
+    font-size: 12px;
+    font-weight: 600;
+    font-family: 'Manrope', sans-serif;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+  }
+
+  /* Grid post - square aspect ratio */
+  .grid-post {
+    aspect-ratio: 1 / 1;
+    width: 100%;
+    overflow: hidden;
+    background-color: #f3f4f6;
+  }
+
+  .grid-post img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    object-position: center;
+  }
+}

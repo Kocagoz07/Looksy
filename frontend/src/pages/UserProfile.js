@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { ArrowLeft, Camera, Edit2, Send, Plus, MessageSquare, UserPlus, UserCheck, Bookmark, Star, Wallet, CheckCircle, Shield, Heart, MessageCircle, X } from "lucide-react";
+import { ArrowLeft, Camera, Edit2, Send, Plus, MessageSquare, UserPlus, UserCheck, Bookmark, Star, Wallet, CheckCircle, Shield, Heart, MessageCircle, X, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
@@ -21,14 +21,31 @@ import { toast } from "sonner";
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 
 // Post Grid Item with Lazy Loading
-function PostGridItem({ post, onClick, isVisible }) {
+function PostGridItem({ post, onClick, isVisible, currentUserId, onDelete }) {
   const [loaded, setLoaded] = useState(false);
+  const [showDelete, setShowDelete] = useState(false);
   const imageUrl = `${BACKEND_URL}/api/images/${post.image_id}`;
+  const isOwner = post.user_id === currentUserId;
+
+  const handleDelete = async (e) => {
+    e.stopPropagation();
+    if (!window.confirm("Delete this post? This action cannot be undone.")) return;
+    
+    try {
+      await axios.delete(`${BACKEND_URL}/api/posts/${post.post_id}`, { withCredentials: true });
+      toast.success("Post deleted");
+      if (onDelete) onDelete(post.post_id);
+    } catch (err) {
+      toast.error("Failed to delete post");
+    }
+  };
 
   return (
     <div 
       className="aspect-square relative cursor-pointer bg-gray-100 overflow-hidden"
       onClick={() => onClick(post)}
+      onMouseEnter={() => setShowDelete(true)}
+      onMouseLeave={() => setShowDelete(false)}
       data-testid={`grid-post-${post.post_id}`}
     >
       {isVisible && (
@@ -54,6 +71,18 @@ function PostGridItem({ post, onClick, isVisible }) {
               <span>{post.comments_count || 0}</span>
             </div>
           </div>
+          
+          {/* Delete button - only for owner */}
+          {isOwner && showDelete && (
+            <button
+              onClick={handleDelete}
+              className="absolute top-2 right-2 p-2 bg-red-500 hover:bg-red-600 rounded-full text-white transition-colors z-10"
+              data-testid={`delete-grid-post-${post.post_id}`}
+              title="Delete post"
+            >
+              <Trash2 className="w-4 h-4" />
+            </button>
+          )}
         </>
       )}
     </div>
@@ -61,11 +90,13 @@ function PostGridItem({ post, onClick, isVisible }) {
 }
 
 // Post Detail Modal
-function PostDetailModal({ post, user, isOpen, onClose, currentUserId, onLike, textColor, bgColor }) {
+function PostDetailModal({ post, user, isOpen, onClose, currentUserId, onLike, onDelete, textColor, bgColor }) {
   const [comments, setComments] = useState([]);
   const [newComment, setNewComment] = useState("");
   const [isLiked, setIsLiked] = useState(post?.liked_by?.includes(currentUserId));
   const [likesCount, setLikesCount] = useState(post?.likes_count || 0);
+  
+  const isOwner = post?.user_id === currentUserId;
 
   useEffect(() => {
     if (isOpen && post) {
@@ -92,6 +123,19 @@ function PostDetailModal({ post, user, isOpen, onClose, currentUserId, onLike, t
       if (onLike) onLike(post.post_id, res.data.likes_count);
     } catch (err) {
       toast.error("Failed to like post");
+    }
+  };
+
+  const handleDelete = async () => {
+    if (!window.confirm("Delete this post? This action cannot be undone.")) return;
+    
+    try {
+      await axios.delete(`${BACKEND_URL}/api/posts/${post.post_id}`, { withCredentials: true });
+      toast.success("Post deleted");
+      onClose();
+      if (onDelete) onDelete(post.post_id);
+    } catch (err) {
+      toast.error("Failed to delete post");
     }
   };
 
@@ -137,9 +181,21 @@ function PostDetailModal({ post, user, isOpen, onClose, currentUserId, onLike, t
                 <span className="font-semibold text-sm">{user?.name}</span>
                 {user?.brand_verified && <BrandVerifiedBadge size="xs" />}
               </div>
-              <button className="ml-auto" onClick={onClose}>
-                <X className="w-5 h-5" />
-              </button>
+              <div className="ml-auto flex items-center gap-2">
+                {isOwner && (
+                  <button 
+                    onClick={handleDelete}
+                    className="p-2 text-red-500 hover:bg-red-50 rounded-full transition-colors"
+                    data-testid="delete-post-modal-btn"
+                    title="Delete post"
+                  >
+                    <Trash2 className="w-5 h-5" />
+                  </button>
+                )}
+                <button onClick={onClose}>
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
             </div>
             
             {/* Caption & Comments */}
@@ -755,6 +811,8 @@ export default function UserProfile() {
                     post={post}
                     onClick={handlePostClick}
                     isVisible={visiblePosts.has(post.post_id) || posts.indexOf(post) < 9}
+                    currentUserId={currentUser?.user_id}
+                    onDelete={(postId) => setPosts(posts.filter(p => p.post_id !== postId))}
                   />
                 </div>
               ))}
@@ -771,6 +829,10 @@ export default function UserProfile() {
         onClose={() => setSelectedPost(null)}
         currentUserId={currentUser?.user_id}
         onLike={handlePostLike}
+        onDelete={(postId) => {
+          setPosts(posts.filter(p => p.post_id !== postId));
+          setSelectedPost(null);
+        }}
         textColor={textColor}
         bgColor={bgColor}
       />
