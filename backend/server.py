@@ -2,6 +2,7 @@ from fastapi import FastAPI, APIRouter, HTTPException, Request, Response, Upload
 from fastapi.responses import JSONResponse, StreamingResponse
 from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
+from starlette.middleware.base import BaseHTTPMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
 import os
 import logging
@@ -19,6 +20,12 @@ import pymongo
 from passlib.context import CryptContext
 from emergentintegrations.llm.chat import LlmChat, UserMessage
 from emergentintegrations.payments.stripe.checkout import StripeCheckout, CheckoutSessionResponse, CheckoutStatusResponse, CheckoutSessionRequest
+
+# Import security module
+from security import (
+    SecurityManager, SECURITY_HEADERS, get_client_ip,
+    RATE_LIMIT_MAX_REQUESTS, LOGIN_RATE_LIMIT_MAX
+)
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
@@ -51,6 +58,63 @@ fs = gridfs.GridFS(sync_db)
 # Create the main app without a prefix
 app = FastAPI()
 
+# Initialize security manager
+security_manager = None
+
+# Security Middleware
+class SecurityMiddleware(BaseHTTPMiddleware):
+    async def dispatch(self, request: Request, call_next):
+        global security_manager
+        
+        ip = get_client_ip(request)
+        
+        # Check if IP is blocked
+        if security_manager:
+            is_blocked, hours_remaining = security_manager.is_ip_blocked(ip)
+            if is_blocked:
+                return JSONResponse(
+                    status_code=403,
+                    content={
+                        "detail": f"Access denied. Your IP has been blocked due to suspicious activity. Try again in {hours_remaining} hours."
+                    }
+                )
+            
+            # Check rate limit for general requests
+            endpoint = request.url.path
+            if not security_manager.check_rate_limit(ip, endpoint):
+                await security_manager.log_security_event(
+                    "rate_limit_exceeded",
+                    f"Rate limit exceeded for {endpoint}",
+                    ip=ip,
+                    severity="medium"
+                )
+                return JSONResponse(
+                    status_code=429,
+                    content={"detail": "Too many requests. Please slow down."}
+                )
+            
+            # Check for suspicious user agent
+            user_agent = request.headers.get("user-agent", "")
+            if security_manager.is_suspicious_user_agent(user_agent):
+                await security_manager.log_security_event(
+                    "suspicious_user_agent",
+                    f"Suspicious user agent detected: {user_agent}",
+                    ip=ip,
+                    severity="high"
+                )
+        
+        # Process request
+        response = await call_next(request)
+        
+        # Add security headers to response
+        for header, value in SECURITY_HEADERS.items():
+            response.headers[header] = value
+        
+        return response
+
+# Add security middleware
+app.add_middleware(SecurityMiddleware)
+
 # Add CORS middleware FIRST (before routes)
 cors_origins = os.environ.get('CORS_ORIGINS', 'http://localhost:3000').split(',')
 app.add_middleware(
@@ -63,6 +127,14 @@ app.add_middleware(
 
 # Create a router with the /api prefix
 api_router = APIRouter(prefix="/api")
+
+# Startup event to initialize security
+@app.on_event("startup")
+async def startup_event():
+    global security_manager
+    security_manager = SecurityManager(db)
+    await security_manager.initialize()
+    logging.info("Security manager initialized")
 
 # Models
 class User(BaseModel):
@@ -595,20 +667,86 @@ async def register_with_password(request: EmailPasswordRegister, response: Respo
     return user_doc
 
 @api_router.post("/auth/login")
-async def login_with_password(request: EmailPasswordLogin, response: Response):
+async def login_with_password(request: EmailPasswordLogin, response: Response, req: Request):
     email = request.email.lower()
+    ip = get_client_ip(req)
+    user_agent = req.headers.get("user-agent", "")
+    
+    # Check if account is locked
+    if security_manager:
+        is_locked, remaining_minutes = await security_manager.check_account_locked(email)
+        if is_locked:
+            await security_manager.log_security_event(
+                "login_blocked_lockout",
+                f"Login attempt blocked - account locked for {email}",
+                ip=ip,
+                email=email
+            )
+            raise HTTPException(
+                status_code=429, 
+                detail=f"Account temporarily locked due to too many failed attempts. Try again in {remaining_minutes} minutes."
+            )
+        
+        # Check rate limit for login endpoint
+        if not security_manager.check_rate_limit(ip, "login", LOGIN_RATE_LIMIT_MAX):
+            await security_manager.log_security_event(
+                "login_rate_limited",
+                f"Login rate limit exceeded for IP",
+                ip=ip,
+                email=email
+            )
+            raise HTTPException(status_code=429, detail="Too many login attempts. Please wait before trying again.")
+        
+        # Check if IP is blocked
+        is_blocked, _ = security_manager.is_ip_blocked(ip)
+        if is_blocked:
+            raise HTTPException(status_code=403, detail="Access denied due to suspicious activity")
     
     # Find user
     user_doc = await db.users.find_one({"email": email}, {"_id": 0})
     if not user_doc:
+        # Record failed attempt
+        if security_manager:
+            await security_manager.record_login_attempt(email, ip, False, user_agent)
+            await security_manager.check_suspicious_activity(ip)
+            remaining = await security_manager.get_remaining_attempts(email)
+            if remaining <= 3:
+                raise HTTPException(
+                    status_code=401, 
+                    detail=f"Invalid email or password. {remaining} attempts remaining before lockout."
+                )
         raise HTTPException(status_code=401, detail="Invalid email or password")
     
     # Verify password
     if not user_doc.get("password_hash"):
+        if security_manager:
+            await security_manager.record_login_attempt(email, ip, False, user_agent)
         raise HTTPException(status_code=401, detail="Please use magic link to sign in")
     
     if not pwd_context.verify(request.password, user_doc["password_hash"]):
+        # Record failed attempt
+        if security_manager:
+            await security_manager.record_login_attempt(email, ip, False, user_agent)
+            await security_manager.check_suspicious_activity(ip)
+            remaining = await security_manager.get_remaining_attempts(email)
+            if remaining <= 3:
+                raise HTTPException(
+                    status_code=401, 
+                    detail=f"Invalid email or password. {remaining} attempts remaining before lockout."
+                )
         raise HTTPException(status_code=401, detail="Invalid email or password")
+    
+    # Successful login - clear failed attempts
+    if security_manager:
+        await security_manager.clear_login_attempts(email)
+        await security_manager.record_login_attempt(email, ip, True, user_agent)
+        await security_manager.log_security_event(
+            "login_success",
+            f"Successful login for {email}",
+            ip=ip,
+            email=email,
+            severity="low"
+        )
     
     # Update category if provided
     if user_doc.get("category") != request.category:
@@ -2060,6 +2198,65 @@ async def stripe_webhook(request: Request):
     except Exception as e:
         logger.error(f"Stripe webhook error: {str(e)}")
         raise HTTPException(status_code=400, detail=str(e))
+
+# ==================== SECURITY ADMIN ENDPOINTS ====================
+
+@api_router.get("/security/events")
+async def get_security_events(request: Request, hours: int = 24, event_type: Optional[str] = None):
+    """Get recent security events (admin only)"""
+    user = await get_current_user(request)
+    if not user:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    
+    # In production, add admin role check here
+    if security_manager:
+        events = await security_manager.get_security_events(hours, event_type)
+        return {
+            "events": events,
+            "total": len(events),
+            "hours": hours
+        }
+    return {"events": [], "total": 0, "hours": hours}
+
+@api_router.get("/security/status")
+async def get_security_status(request: Request):
+    """Get current security status"""
+    user = await get_current_user(request)
+    if not user:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    
+    from security import blocked_ips, login_attempts, failed_attempts_by_ip, account_lockouts
+    
+    return {
+        "blocked_ips_count": len(blocked_ips),
+        "accounts_locked_count": len(account_lockouts),
+        "active_rate_limits": len(failed_attempts_by_ip),
+        "security_enabled": security_manager is not None
+    }
+
+@api_router.post("/security/unblock-ip")
+async def unblock_ip_endpoint(request: Request, ip: str):
+    """Unblock an IP address (admin only)"""
+    user = await get_current_user(request)
+    if not user:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    
+    if security_manager:
+        await security_manager.unblock_ip(ip)
+        return {"message": f"IP {ip} has been unblocked"}
+    raise HTTPException(status_code=500, detail="Security manager not initialized")
+
+@api_router.post("/security/unlock-account")
+async def unlock_account_endpoint(request: Request, email: str):
+    """Unlock a locked account (admin only)"""
+    user = await get_current_user(request)
+    if not user:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    
+    if security_manager:
+        await security_manager.clear_login_attempts(email)
+        return {"message": f"Account {email} has been unlocked"}
+    raise HTTPException(status_code=500, detail="Security manager not initialized")
 
 # Include the router in the main app
 app.include_router(api_router)
