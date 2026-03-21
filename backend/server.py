@@ -1679,6 +1679,146 @@ Respond in JSON format:
         logger.error(f"AI analysis error: {str(e)}")
         raise HTTPException(status_code=500, detail=f"AI analysis failed: {str(e)}")
 
+# ================= BRAND DETECTION FOR PRODUCT LINKS =================
+
+class BrandCheckRequest(BaseModel):
+    product_title: str
+
+class BrandCheckResponse(BaseModel):
+    status: str  # "APPROVED" or "REJECTED"
+    has_brand: bool
+    detected_terms: List[str]
+    clean_title: str
+    reason: str
+    confidence: int
+
+@api_router.post("/products/check-brand", response_model=BrandCheckResponse)
+async def check_product_brand(request: Request, brand_req: BrandCheckRequest):
+    """
+    AI-powered brand detection for product titles.
+    Rejects titles containing brand names and suggests generic alternatives.
+    
+    Examples:
+    - "Zara Jacket" → REJECTED (brand detected: Zara)
+    - "Winter Green Jacket" → APPROVED (generic description)
+    - "Nike Air Max Shoes" → REJECTED (brands: Nike, Air Max)
+    - "Comfortable running shoes" → APPROVED (generic)
+    """
+    user = await get_current_user(request)
+    if not user:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    
+    product_title = brand_req.product_title.strip()
+    
+    if not product_title:
+        raise HTTPException(status_code=400, detail="Product title is required")
+    
+    if len(product_title) > 200:
+        raise HTTPException(status_code=400, detail="Product title too long (max 200 characters)")
+    
+    api_key = os.environ.get('EMERGENT_LLM_KEY')
+    if not api_key:
+        # Fallback: basic keyword check if AI not available
+        logger.warning("AI not configured, using basic brand check")
+        return BrandCheckResponse(
+            status="APPROVED",
+            has_brand=False,
+            detected_terms=[],
+            clean_title=product_title,
+            reason="AI service not available, basic check passed",
+            confidence=50
+        )
+    
+    try:
+        chat = LlmChat(
+            api_key=api_key,
+            session_id=f"brand_check_{user.user_id}_{uuid.uuid4().hex[:8]}",
+            system_message="""You are a strict brand and trademark detection system for a fashion affiliate platform.
+
+Your task is to analyze product titles and detect ANY brand-related terms.
+
+DEFINITION OF BRAND:
+- Company names (Nike, Zara, H&M, Gucci, Apple, Samsung, etc.)
+- Product lines or series (iPhone, Galaxy, Air Jordan, PlayStation)
+- Trademarked product names
+- Well-known or lesser-known commercial brand names
+- Obfuscated brand names (n!ke, appl3, z4ra)
+
+RULES:
+- If ANY brand term is present → REJECTED
+- If title is fully generic → APPROVED
+- Be strict. When in doubt, prefer REJECTED.
+
+CONTEXT:
+- "apple fruit basket" → NOT a brand (fruit context)
+- "apple phone case" → BRAND (Apple company)
+- "polo shirt" → NOT a brand (generic clothing type)
+- "Ralph Lauren polo" → BRAND"""
+        ).with_model("openai", "gpt-4o-mini")
+        
+        prompt = f"""Analyze this product title for brand names:
+
+"{product_title}"
+
+RESPOND IN STRICT JSON FORMAT ONLY:
+{{
+  "status": "APPROVED" or "REJECTED",
+  "has_brand": true or false,
+  "detected_terms": ["list", "of", "brands"] or [],
+  "clean_title": "if REJECTED, rewrite as generic; if APPROVED, return original",
+  "reason": "brief explanation",
+  "confidence": 0-100
+}}
+
+Examples:
+- "Zara Jacket" → REJECTED, detected: ["Zara"], clean: "Stylish casual jacket"
+- "Winter Green Jacket" → APPROVED, detected: [], clean: "Winter Green Jacket"
+- "Adidas Running Shoes" → REJECTED, detected: ["Adidas"], clean: "Athletic running shoes"
+- "Comfortable cotton t-shirt" → APPROVED
+
+ONLY OUTPUT JSON, NO OTHER TEXT."""
+
+        user_message = UserMessage(text=prompt)
+        response = await chat.send_message(user_message)
+        
+        # Parse the JSON response
+        import json
+        try:
+            response_text = response.strip()
+            # Remove markdown code blocks if present
+            if response_text.startswith("```"):
+                lines = response_text.split("\n")
+                response_text = "\n".join(lines[1:-1] if lines[-1] == "```" else lines[1:])
+                if response_text.startswith("json"):
+                    response_text = response_text[4:].strip()
+            
+            result = json.loads(response_text)
+            
+            return BrandCheckResponse(
+                status=result.get("status", "APPROVED"),
+                has_brand=result.get("has_brand", False),
+                detected_terms=result.get("detected_terms", []),
+                clean_title=result.get("clean_title", product_title),
+                reason=result.get("reason", ""),
+                confidence=result.get("confidence", 80)
+            )
+            
+        except json.JSONDecodeError as e:
+            logger.error(f"Failed to parse AI response: {response}")
+            # Default to approved if AI response is malformed
+            return BrandCheckResponse(
+                status="APPROVED",
+                has_brand=False,
+                detected_terms=[],
+                clean_title=product_title,
+                reason="Could not parse AI response, defaulting to approved",
+                confidence=30
+            )
+        
+    except Exception as e:
+        logger.error(f"Brand check error: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Brand check failed: {str(e)}")
+
 @api_router.post("/collaborations/ai/suggest-reply")
 async def suggest_reply(request: Request, reply_req: AIReplyRequest):
     """AI-powered reply suggestion for collaboration requests"""

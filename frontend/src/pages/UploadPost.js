@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { ArrowLeft, Upload, Plus, X, Trash2 } from "lucide-react";
+import { ArrowLeft, Upload, Plus, X, Trash2, AlertCircle, CheckCircle, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -21,6 +21,8 @@ export default function UploadPost() {
   const [totalPrice, setTotalPrice] = useState("");
   const [products, setProducts] = useState([]);
   const [newProduct, setNewProduct] = useState({ name: "", url: "" });
+  const [checkingBrand, setCheckingBrand] = useState(false);
+  const [brandCheckResult, setBrandCheckResult] = useState(null);
 
   const handleImageChange = (e) => {
     const file = e.target.files[0];
@@ -40,14 +42,60 @@ export default function UploadPost() {
     toast.success("Image removed");
   };
 
-  const addProduct = () => {
-    if (newProduct.name && newProduct.url) {
-      setProducts([...products, newProduct]);
-      setNewProduct({ name: "", url: "" });
-      toast.success("Product added");
-    } else {
-      toast.error("Please fill both product name and URL");
+  // Check product title for brand names
+  const checkProductBrand = async (title) => {
+    setCheckingBrand(true);
+    setBrandCheckResult(null);
+    
+    try {
+      const response = await axios.post(
+        `${BACKEND_URL}/api/products/check-brand`,
+        { product_title: title },
+        { withCredentials: true }
+      );
+      
+      setBrandCheckResult(response.data);
+      return response.data;
+    } catch (err) {
+      console.error("Brand check error:", err);
+      toast.error("Failed to check product title");
+      return null;
+    } finally {
+      setCheckingBrand(false);
     }
+  };
+
+  const addProduct = async () => {
+    if (!newProduct.name || !newProduct.url) {
+      toast.error("Please fill both product name and URL");
+      return;
+    }
+
+    // Check for brand names before adding
+    const brandResult = await checkProductBrand(newProduct.name);
+    
+    if (!brandResult) {
+      return; // Error occurred during check
+    }
+    
+    if (brandResult.status === "REJECTED") {
+      // Show detailed error with detected brands
+      toast.error(
+        <div className="space-y-2">
+          <p className="font-semibold">Brand name detected!</p>
+          <p className="text-sm">Detected: {brandResult.detected_terms.join(", ")}</p>
+          <p className="text-sm text-gray-300">Use generic descriptions like: "{brandResult.clean_title}"</p>
+        </div>,
+        { duration: 6000 }
+      );
+      return;
+    }
+    
+    // Brand check passed - add product
+    setProducts([...products, newProduct]);
+    setNewProduct({ name: "", url: "" });
+    setBrandCheckResult(null);
+    toast.success("Product added");
   };
 
   const removeProduct = (index) => {
@@ -276,13 +324,54 @@ export default function UploadPost() {
 
             {/* Add Product Form */}
             <div className="border rounded-lg p-4 space-y-3">
-              <Input
-                data-testid="product-name-input"
-                value={newProduct.name}
-                onChange={(e) => setNewProduct({ ...newProduct, name: e.target.value })}
-                placeholder="Product name"
-                className="font-manrope"
-              />
+              <div>
+                <Input
+                  data-testid="product-name-input"
+                  value={newProduct.name}
+                  onChange={(e) => {
+                    setNewProduct({ ...newProduct, name: e.target.value });
+                    setBrandCheckResult(null);
+                  }}
+                  placeholder="Product name (e.g., 'Winter Green Jacket' - no brand names)"
+                  className="font-manrope"
+                />
+                
+                {/* Brand Check Result Display */}
+                {brandCheckResult && (
+                  <div className={`mt-2 p-3 rounded-lg text-sm ${
+                    brandCheckResult.status === "REJECTED" 
+                      ? "bg-red-50 border border-red-200 text-red-700"
+                      : "bg-green-50 border border-green-200 text-green-700"
+                  }`}>
+                    <div className="flex items-start gap-2">
+                      {brandCheckResult.status === "REJECTED" ? (
+                        <AlertCircle className="w-5 h-5 flex-shrink-0 mt-0.5" />
+                      ) : (
+                        <CheckCircle className="w-5 h-5 flex-shrink-0 mt-0.5" />
+                      )}
+                      <div className="space-y-1">
+                        <p className="font-semibold">
+                          {brandCheckResult.status === "REJECTED" ? "Brand Detected!" : "Title Approved"}
+                        </p>
+                        {brandCheckResult.status === "REJECTED" && (
+                          <>
+                            <p>Detected brands: <span className="font-semibold">{brandCheckResult.detected_terms.join(", ")}</span></p>
+                            <p className="text-gray-600">
+                              Try instead: "<span className="italic">{brandCheckResult.clean_title}</span>"
+                            </p>
+                          </>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                )}
+                
+                {/* Helper text */}
+                <p className="mt-2 text-xs text-gray-500 font-manrope">
+                  Use generic descriptions only. Brand names like Nike, Zara, Gucci are not allowed.
+                </p>
+              </div>
+              
               <Input
                 data-testid="product-url-input"
                 value={newProduct.url}
@@ -296,10 +385,35 @@ export default function UploadPost() {
                 onClick={addProduct}
                 variant="outline"
                 className="w-full font-manrope"
+                disabled={checkingBrand}
               >
-                <Plus className="w-4 h-4 mr-2" />
-                Add Product
+                {checkingBrand ? (
+                  <>
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                    Checking...
+                  </>
+                ) : (
+                  <>
+                    <Plus className="w-4 h-4 mr-2" />
+                    Add Product
+                  </>
+                )}
               </Button>
+            </div>
+            
+            {/* Brand Guidelines Info */}
+            <div className="mt-3 p-3 bg-amber-50 border border-amber-200 rounded-lg">
+              <p className="text-xs text-amber-800 font-manrope">
+                <strong>Why no brand names?</strong> Using generic descriptions helps maintain a fair marketplace and avoids trademark issues.
+              </p>
+              <div className="mt-2 text-xs text-amber-700 font-manrope">
+                <p className="font-semibold mb-1">Examples:</p>
+                <ul className="list-disc list-inside space-y-0.5">
+                  <li><span className="text-red-600 line-through">Zara Jacket</span> → <span className="text-green-600">Stylish casual jacket</span></li>
+                  <li><span className="text-red-600 line-through">Nike Running Shoes</span> → <span className="text-green-600">Athletic running shoes</span></li>
+                  <li><span className="text-red-600 line-through">Gucci Handbag</span> → <span className="text-green-600">Luxury leather handbag</span></li>
+                </ul>
+              </div>
             </div>
           </div>
 
