@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import axios from "axios";
-import { Spade, Heart, Star, Plus, User, LogOut, Search, Crown, Compass } from "lucide-react";
+import { Spade, Heart, Star, Plus, User, LogOut, Search, Crown, Compass, MessageCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -147,6 +147,18 @@ export default function Dashboard({ category = null }) {
               title="Celebrity Posts"
             >
               <Crown className="w-4 h-4" />
+            </Button>
+            
+            {/* Messages */}
+            <Button
+              data-testid="messages-btn"
+              onClick={() => navigate("/chat")}
+              variant="ghost"
+              size="icon"
+              className="rounded-full"
+              title="Messages"
+            >
+              <MessageCircle className="w-4 h-4" />
             </Button>
             
             <Button

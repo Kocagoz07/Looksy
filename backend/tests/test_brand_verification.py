@@ -12,7 +12,7 @@ import os
 import time
 
 # Use the public backend URL from environment
-BASE_URL = os.environ.get('REACT_APP_BACKEND_URL', 'https://looksy-brand-badge.preview.emergentagent.com').rstrip('/')
+BASE_URL = os.environ.get('REACT_APP_BACKEND_URL', 'https://fashion-hub-1308.preview.emergentagent.com').rstrip('/')
 
 # Test credentials
 TEST_USER_EMAIL = "testuser@looksy.com"

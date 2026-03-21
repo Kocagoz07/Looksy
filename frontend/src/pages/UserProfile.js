@@ -763,6 +763,18 @@ export default function UserProfile() {
                     )}
                   </Button>
                   
+                  {/* Direct Message Button */}
+                  <Button
+                    onClick={() => navigate(`/chat?user=${user.user_id}`)}
+                    className="px-6 py-3 rounded-full font-manrope font-semibold flex items-center gap-2"
+                    variant="outline"
+                    style={{ borderColor: textColor, color: textColor }}
+                    data-testid="message-btn"
+                  >
+                    <MessageCircle className="w-4 h-4" />
+                    Message
+                  </Button>
+                  
                   {/* Simple Collaborate Button */}
                   <Button
                     onClick={() => setCollaborateOpen(true)}

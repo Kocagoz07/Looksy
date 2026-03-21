@@ -29,11 +29,11 @@ print('User ID: ' + userId);
 ## Step 2: Test Backend API
 ```bash
 # Test auth endpoint
-curl -X GET "https://looksy-brand-badge.preview.emergentagent.com/api/auth/me" \
+curl -X GET "https://fashion-hub-1308.preview.emergentagent.com/api/auth/me" \
   -H "Authorization: Bearer YOUR_SESSION_TOKEN"
 
 # Test posts endpoint
-curl -X GET "https://looksy-brand-badge.preview.emergentagent.com/api/posts" \
+curl -X GET "https://fashion-hub-1308.preview.emergentagent.com/api/posts" \
   -H "Authorization: Bearer YOUR_SESSION_TOKEN"
 ```
 
@@ -49,7 +49,7 @@ await page.context.add_cookies([{
     "secure": True,
     "sameSite": "None"
 }]);
-await page.goto("https://looksy-brand-badge.preview.emergentagent.com/dashboard");
+await page.goto("https://fashion-hub-1308.preview.emergentagent.com/dashboard");
 ```
 
 ## Quick Debug

@@ -2405,6 +2405,502 @@ async def unlock_account_endpoint(request: Request, email: str):
         return {"message": f"Account {email} has been unlocked"}
     raise HTTPException(status_code=500, detail="Security manager not initialized")
 
+# ================= CHAT SYSTEM =================
+
+from chat import ChatManager
+from location import LocationService, PrivacySettings, PrivacyZone
+from fastapi import WebSocket, WebSocketDisconnect
+import json as json_module
+
+# Initialize chat manager
+chat_manager = None
+location_service = None
+
+@app.on_event("startup")
+async def startup_chat_and_location():
+    global chat_manager, location_service
+    chat_manager = ChatManager(db)
+    await chat_manager.initialize()
+    location_service = LocationService(db)
+    await location_service.initialize()
+    logger.info("Chat manager and Location service initialized")
+
+# WebSocket endpoint for real-time chat
+@app.websocket("/ws/chat")
+async def websocket_chat(websocket: WebSocket):
+    await websocket.accept()
+    user_id = None
+    
+    try:
+        # Wait for authentication message
+        auth_data = await websocket.receive_json()
+        if auth_data.get("type") != "auth":
+            await websocket.close(code=4001, reason="Authentication required")
+            return
+        
+        # Verify session token
+        session_token = auth_data.get("token")
+        if not session_token:
+            await websocket.close(code=4002, reason="Invalid token")
+            return
+        
+        session_doc = await db.user_sessions.find_one({"session_token": session_token}, {"_id": 0})
+        if not session_doc:
+            await websocket.close(code=4002, reason="Invalid session")
+            return
+        
+        expires_at = session_doc["expires_at"]
+        if isinstance(expires_at, str):
+            expires_at = datetime.fromisoformat(expires_at)
+        if expires_at.tzinfo is None:
+            expires_at = expires_at.replace(tzinfo=timezone.utc)
+        if expires_at < datetime.now(timezone.utc):
+            await websocket.close(code=4003, reason="Session expired")
+            return
+        
+        user_id = session_doc["user_id"]
+        chat_manager.register_connection(user_id, websocket)
+        
+        # Send connection acknowledgment
+        await websocket.send_json({
+            "type": "connected",
+            "user_id": user_id
+        })
+        
+        # Main message loop
+        while True:
+            data = await websocket.receive_json()
+            msg_type = data.get("type")
+            
+            if msg_type == "ping":
+                await websocket.send_json({"type": "pong"})
+            
+            elif msg_type == "message:send":
+                conversation_id = data.get("conversation_id")
+                content = data.get("content")
+                
+                if conversation_id and content:
+                    message = await chat_manager.send_message(
+                        conversation_id=conversation_id,
+                        sender_id=user_id,
+                        content=content
+                    )
+                    
+                    # Send to sender
+                    await websocket.send_json({
+                        "type": "message:sent",
+                        "message": message
+                    })
+                    
+                    # Broadcast to other participants
+                    await chat_manager.broadcast_to_conversation(
+                        conversation_id,
+                        {"type": "message:new", "message": message},
+                        exclude_user=user_id
+                    )
+            
+            elif msg_type == "typing:start":
+                conversation_id = data.get("conversation_id")
+                if conversation_id:
+                    chat_manager.set_typing(conversation_id, user_id, True)
+                    await chat_manager.broadcast_to_conversation(
+                        conversation_id,
+                        {"type": "typing:update", "user_id": user_id, "is_typing": True},
+                        exclude_user=user_id
+                    )
+            
+            elif msg_type == "typing:stop":
+                conversation_id = data.get("conversation_id")
+                if conversation_id:
+                    chat_manager.set_typing(conversation_id, user_id, False)
+                    await chat_manager.broadcast_to_conversation(
+                        conversation_id,
+                        {"type": "typing:update", "user_id": user_id, "is_typing": False},
+                        exclude_user=user_id
+                    )
+            
+            elif msg_type == "message:read":
+                conversation_id = data.get("conversation_id")
+                message_id = data.get("message_id")
+                if conversation_id:
+                    await chat_manager.mark_messages_read(conversation_id, user_id, message_id)
+                    await chat_manager.broadcast_to_conversation(
+                        conversation_id,
+                        {"type": "message:read_receipt", "user_id": user_id, "conversation_id": conversation_id},
+                        exclude_user=user_id
+                    )
+            
+            elif msg_type == "presence:check":
+                user_ids = data.get("user_ids", [])
+                statuses = chat_manager.get_online_users(user_ids)
+                await websocket.send_json({
+                    "type": "presence:update",
+                    "statuses": statuses
+                })
+    
+    except WebSocketDisconnect:
+        logger.info(f"WebSocket disconnected for user {user_id}")
+    except Exception as e:
+        logger.error(f"WebSocket error: {e}")
+    finally:
+        if user_id:
+            chat_manager.unregister_connection(user_id, websocket)
+
+# Chat REST API endpoints
+class DirectConversationRequest(BaseModel):
+    user_id: str
+
+class SendMessageRequest(BaseModel):
+    content: str
+    message_type: str = "text"
+
+@api_router.post("/chat/conversations/direct")
+async def create_direct_conversation(request: Request, body: DirectConversationRequest):
+    """Get or create a direct conversation with another user"""
+    user = await get_current_user(request)
+    if not user:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    
+    if user.user_id == body.user_id:
+        raise HTTPException(status_code=400, detail="Cannot chat with yourself")
+    
+    # Check if target user exists
+    target = await db.users.find_one({"user_id": body.user_id}, {"_id": 0})
+    if not target:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    conversation = await chat_manager.get_or_create_direct_conversation(
+        user.user_id, body.user_id
+    )
+    
+    # Add other user info
+    conversation["other_user"] = {
+        "user_id": target["user_id"],
+        "name": target.get("name"),
+        "picture": target.get("picture")
+    }
+    
+    return conversation
+
+@api_router.get("/chat/conversations")
+async def get_conversations(request: Request, limit: int = 20, cursor: Optional[str] = None):
+    """Get user's conversations"""
+    user = await get_current_user(request)
+    if not user:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    
+    return await chat_manager.get_user_conversations(user.user_id, limit, cursor)
+
+@api_router.get("/chat/conversations/{conversation_id}")
+async def get_conversation(request: Request, conversation_id: str):
+    """Get a specific conversation"""
+    user = await get_current_user(request)
+    if not user:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    
+    conversation = await chat_manager.get_conversation(conversation_id, user.user_id)
+    if not conversation:
+        raise HTTPException(status_code=404, detail="Conversation not found")
+    
+    return conversation
+
+@api_router.get("/chat/conversations/{conversation_id}/messages")
+async def get_messages(
+    request: Request,
+    conversation_id: str,
+    limit: int = 30,
+    before: Optional[str] = None
+):
+    """Get messages in a conversation"""
+    user = await get_current_user(request)
+    if not user:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    
+    try:
+        return await chat_manager.get_messages(conversation_id, user.user_id, limit, before)
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+
+@api_router.post("/chat/conversations/{conversation_id}/messages")
+async def send_message(request: Request, conversation_id: str, body: SendMessageRequest):
+    """Send a message to a conversation"""
+    user = await get_current_user(request)
+    if not user:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    
+    try:
+        message = await chat_manager.send_message(
+            conversation_id=conversation_id,
+            sender_id=user.user_id,
+            content=body.content,
+            message_type=body.message_type
+        )
+        
+        # Broadcast to other participants via WebSocket
+        await chat_manager.broadcast_to_conversation(
+            conversation_id,
+            {"type": "message:new", "message": message},
+            exclude_user=user.user_id
+        )
+        
+        return message
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+
+@api_router.post("/chat/conversations/{conversation_id}/read")
+async def mark_read(request: Request, conversation_id: str, message_id: Optional[str] = None):
+    """Mark messages as read"""
+    user = await get_current_user(request)
+    if not user:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    
+    return await chat_manager.mark_messages_read(conversation_id, user.user_id, message_id)
+
+@api_router.delete("/chat/messages/{message_id}")
+async def delete_message(request: Request, message_id: str):
+    """Delete a message"""
+    user = await get_current_user(request)
+    if not user:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    
+    if await chat_manager.delete_message(message_id, user.user_id):
+        return {"message": "Message deleted"}
+    raise HTTPException(status_code=404, detail="Message not found or not authorized")
+
+@api_router.get("/chat/unread-count")
+async def get_unread_count(request: Request):
+    """Get total unread message count"""
+    user = await get_current_user(request)
+    if not user:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    
+    count = await chat_manager.get_total_unread_count(user.user_id)
+    return {"unread_count": count}
+
+@api_router.post("/chat/presence")
+async def get_presence(request: Request, user_ids: List[str]):
+    """Get online status of users"""
+    user = await get_current_user(request)
+    if not user:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    
+    return {"statuses": chat_manager.get_online_users(user_ids)}
+
+# ================= LOCATION FEATURE =================
+
+class CreateLocationRequest(BaseModel):
+    name: str
+    city: Optional[str] = None
+    country: Optional[str] = None
+    latitude: Optional[float] = None
+    longitude: Optional[float] = None
+
+class AddPostLocationRequest(BaseModel):
+    location_id: Optional[str] = None
+    location_name: Optional[str] = None
+    city: Optional[str] = None
+    privacy_level: str = "neighborhood"
+
+class PrivacyZoneRequest(BaseModel):
+    name: str
+    latitude: float
+    longitude: float
+    radius_meters: int = 200
+    action: str = "fuzz_to_neighborhood"
+
+@api_router.get("/locations/search")
+async def search_locations(
+    request: Request,
+    q: str = "",
+    lat: Optional[float] = None,
+    lng: Optional[float] = None,
+    limit: int = 20
+):
+    """Search for locations"""
+    user = await get_current_user(request)
+    if not user:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    
+    results = await location_service.search_locations(q, lat, lng, limit)
+    return {"locations": results}
+
+@api_router.get("/locations/nearby")
+async def get_nearby_locations(
+    request: Request,
+    lat: float,
+    lng: float,
+    radius: int = 1000,
+    limit: int = 20
+):
+    """Get locations near a point"""
+    user = await get_current_user(request)
+    if not user:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    
+    locations = await location_service.get_nearby_locations(lat, lng, radius, limit)
+    return {"locations": locations}
+
+@api_router.get("/locations/trending")
+async def get_trending_locations(request: Request, limit: int = 20):
+    """Get trending locations"""
+    locations = await location_service.get_trending_locations(limit)
+    return {"locations": locations}
+
+@api_router.get("/locations/{location_id}")
+async def get_location(location_id: str):
+    """Get location details"""
+    location = await location_service.get_location(location_id)
+    if not location:
+        raise HTTPException(status_code=404, detail="Location not found")
+    return location
+
+@api_router.get("/locations/{location_id}/posts")
+async def get_location_posts(
+    location_id: str,
+    limit: int = 20,
+    cursor: Optional[str] = None
+):
+    """Get posts at a location"""
+    return await location_service.get_posts_at_location(location_id, limit, cursor)
+
+@api_router.post("/locations")
+async def create_location(request: Request, body: CreateLocationRequest):
+    """Create a new location"""
+    user = await get_current_user(request)
+    if not user:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    
+    if body.latitude and body.longitude:
+        location = await location_service.get_or_create_location(
+            name=body.name,
+            latitude=body.latitude,
+            longitude=body.longitude,
+            city=body.city,
+            country=body.country
+        )
+    else:
+        location = await location_service.create_custom_location(
+            name=body.name,
+            city=body.city,
+            country=body.country
+        )
+    
+    return location
+
+@api_router.post("/posts/{post_id}/location")
+async def add_location_to_post(request: Request, post_id: str, body: AddPostLocationRequest):
+    """Add location to a post"""
+    user = await get_current_user(request)
+    if not user:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    
+    # Verify post ownership
+    post = await db.posts.find_one({"post_id": post_id, "user_id": user.user_id})
+    if not post:
+        raise HTTPException(status_code=404, detail="Post not found or not authorized")
+    
+    # Get or create location
+    if body.location_id:
+        location = await location_service.get_location(body.location_id)
+        if not location:
+            raise HTTPException(status_code=404, detail="Location not found")
+    elif body.location_name:
+        location = await location_service.create_custom_location(
+            name=body.location_name,
+            city=body.city
+        )
+    else:
+        raise HTTPException(status_code=400, detail="location_id or location_name required")
+    
+    privacy = PrivacySettings(precision_level=body.privacy_level)
+    
+    result = await location_service.add_location_to_post(
+        post_id=post_id,
+        user_id=user.user_id,
+        location_id=location["location_id"],
+        privacy=privacy
+    )
+    
+    return result
+
+@api_router.delete("/posts/{post_id}/location")
+async def remove_location_from_post(request: Request, post_id: str):
+    """Remove location from a post"""
+    user = await get_current_user(request)
+    if not user:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    
+    if await location_service.remove_location_from_post(post_id, user.user_id):
+        return {"message": "Location removed"}
+    raise HTTPException(status_code=404, detail="Location not found")
+
+@api_router.get("/posts/{post_id}/location")
+async def get_post_location(post_id: str):
+    """Get location info for a post"""
+    location = await location_service.get_post_location(post_id)
+    if not location:
+        raise HTTPException(status_code=404, detail="No location for this post")
+    return location
+
+@api_router.get("/users/me/location-settings")
+async def get_location_settings(request: Request):
+    """Get user's location settings"""
+    user = await get_current_user(request)
+    if not user:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    
+    return await location_service.get_user_location_settings(user.user_id)
+
+@api_router.patch("/users/me/location-settings")
+async def update_location_settings(request: Request, settings: dict):
+    """Update user's location settings"""
+    user = await get_current_user(request)
+    if not user:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    
+    return await location_service.update_user_location_settings(user.user_id, settings)
+
+@api_router.post("/users/me/location-settings/privacy-zones")
+async def add_privacy_zone(request: Request, body: PrivacyZoneRequest):
+    """Add a privacy zone"""
+    user = await get_current_user(request)
+    if not user:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    
+    zone = PrivacyZone(**body.model_dump())
+    return await location_service.add_privacy_zone(user.user_id, zone)
+
+@api_router.delete("/users/me/location-settings/privacy-zones/{zone_id}")
+async def remove_privacy_zone(request: Request, zone_id: str):
+    """Remove a privacy zone"""
+    user = await get_current_user(request)
+    if not user:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    
+    if await location_service.remove_privacy_zone(user.user_id, zone_id):
+        return {"message": "Privacy zone removed"}
+    raise HTTPException(status_code=404, detail="Privacy zone not found")
+
+@api_router.post("/users/me/saved-locations/{location_id}")
+async def save_location(request: Request, location_id: str, nickname: Optional[str] = None):
+    """Save a location to favorites"""
+    user = await get_current_user(request)
+    if not user:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    
+    return await location_service.save_location(user.user_id, location_id, nickname)
+
+@api_router.delete("/users/me/saved-locations/{location_id}")
+async def unsave_location(request: Request, location_id: str):
+    """Remove a location from favorites"""
+    user = await get_current_user(request)
+    if not user:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    
+    if await location_service.unsave_location(user.user_id, location_id):
+        return {"message": "Location removed from favorites"}
+    raise HTTPException(status_code=404, detail="Location not found in favorites")
+
 # Include the router in the main app
 app.include_router(api_router)
 

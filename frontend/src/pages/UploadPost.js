@@ -4,6 +4,7 @@ import { ArrowLeft, Upload, Plus, X, Trash2, AlertCircle, CheckCircle, Loader2 }
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import LocationPicker from "@/components/LocationPicker";
 import axios from "axios";
 import { toast } from "sonner";
 
@@ -17,6 +18,7 @@ export default function UploadPost() {
   const [caption, setCaption] = useState("");
   const [music, setMusic] = useState("");
   const [location, setLocation] = useState("");
+  const [selectedLocation, setSelectedLocation] = useState(null);
   const [venue, setVenue] = useState("");
   const [totalPrice, setTotalPrice] = useState("");
   const [products, setProducts] = useState([]);
@@ -138,11 +140,24 @@ export default function UploadPost() {
         products: products
       };
 
-      await axios.post(
+      const postResponse = await axios.post(
         `${BACKEND_URL}/api/posts?image_id=${imageId}`,
         postData,
         { withCredentials: true }
       );
+
+      // If a location was selected, add it to the post
+      if (selectedLocation) {
+        try {
+          await axios.post(
+            `${BACKEND_URL}/api/posts/${postResponse.data.post_id}/location`,
+            { location_id: selectedLocation.location_id },
+            { withCredentials: true }
+          );
+        } catch (locErr) {
+          console.warn("Failed to add location to post:", locErr);
+        }
+      }
 
       toast.success("Post uploaded successfully!");
       navigate("/dashboard");
@@ -262,12 +277,16 @@ export default function UploadPost() {
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <label className="font-manrope text-sm font-semibold mb-2 block">Location (Optional)</label>
-              <Input
-                data-testid="location-input"
-                value={location}
-                onChange={(e) => setLocation(e.target.value)}
-                placeholder="e.g., New York"
-                className="font-manrope"
+              <LocationPicker
+                selectedLocation={selectedLocation}
+                onLocationSelect={(loc) => {
+                  setSelectedLocation(loc);
+                  setLocation(loc.name);
+                }}
+                onLocationRemove={() => {
+                  setSelectedLocation(null);
+                  setLocation("");
+                }}
               />
             </div>
             <div>
