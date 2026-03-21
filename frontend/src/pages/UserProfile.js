@@ -150,6 +150,16 @@ function PostDetailModal({ post, user, isOpen, onClose, currentUserId, onLike, o
     }
   };
 
+  const handleDeleteComment = async (commentId) => {
+    try {
+      await axios.delete(`${BACKEND_URL}/api/comments/${commentId}`, { withCredentials: true });
+      setComments(comments.filter(c => c.comment_id !== commentId));
+      toast.success("Comment deleted");
+    } catch (err) {
+      toast.error("Failed to delete comment");
+    }
+  };
+
   if (!post) return null;
 
   return (
@@ -215,7 +225,7 @@ function PostDetailModal({ post, user, isOpen, onClose, currentUserId, onLike, o
               )}
               
               {comments.map((comment) => (
-                <div key={comment.comment_id} className="flex gap-3">
+                <div key={comment.comment_id} className="flex gap-3 group">
                   <div className="w-8 h-8 rounded-full bg-gray-200 flex-shrink-0 flex items-center justify-center text-xs font-semibold overflow-hidden">
                     {comment.user_picture ? (
                       <img src={comment.user_picture} className="w-full h-full object-cover" alt="" />
@@ -223,11 +233,24 @@ function PostDetailModal({ post, user, isOpen, onClose, currentUserId, onLike, o
                       comment.user_name?.[0]
                     )}
                   </div>
-                  <div>
-                    <p className="text-sm">
-                      <span className="font-semibold mr-2">{comment.user_name}</span>
-                      {comment.text}
-                    </p>
+                  <div className="flex-1">
+                    <div className="flex items-start justify-between">
+                      <p className="text-sm">
+                        <span className="font-semibold mr-2">{comment.user_name}</span>
+                        {comment.text}
+                      </p>
+                      {/* Delete button - only for comment owner or post owner */}
+                      {(comment.user_id === currentUserId || post.user_id === currentUserId) && (
+                        <button
+                          onClick={() => handleDeleteComment(comment.comment_id)}
+                          className="opacity-0 group-hover:opacity-100 p-1 text-gray-400 hover:text-red-500 transition-all"
+                          data-testid={`delete-comment-${comment.comment_id}`}
+                          title="Delete comment"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      )}
+                    </div>
                   </div>
                 </div>
               ))}

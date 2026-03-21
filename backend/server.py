@@ -1257,8 +1257,15 @@ async def delete_comment(request: Request, comment_id: str):
     if not comment:
         raise HTTPException(status_code=404, detail="Comment not found")
     
-    if comment["user_id"] != user.user_id:
-        raise HTTPException(status_code=403, detail="Not authorized")
+    # Check if user is the comment author
+    is_comment_owner = comment["user_id"] == user.user_id
+    
+    # Check if user is the post owner (can delete any comment on their posts)
+    post = await db.posts.find_one({"post_id": comment["post_id"]}, {"_id": 0, "user_id": 1})
+    is_post_owner = post and post["user_id"] == user.user_id
+    
+    if not is_comment_owner and not is_post_owner:
+        raise HTTPException(status_code=403, detail="Not authorized to delete this comment")
     
     await db.comments.delete_one({"comment_id": comment_id})
     
