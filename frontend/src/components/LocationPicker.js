@@ -6,6 +6,7 @@ import { Input } from './ui/input';
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogHeader,
   DialogTitle,
   DialogTrigger,
@@ -142,6 +143,9 @@ const LocationPicker = ({ selectedLocation, onLocationSelect, onLocationRemove }
             <MapPin className="w-5 h-5" />
             Add Location
           </DialogTitle>
+          <DialogDescription className="sr-only">
+            Search for a location or create a custom one to tag your post
+          </DialogDescription>
         </DialogHeader>
         
         <div className="space-y-4">
