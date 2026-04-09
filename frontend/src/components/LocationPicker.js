@@ -99,14 +99,15 @@ const LocationPicker = ({ selectedLocation, onLocationSelect, onLocationRemove }
 
   // If location is selected, show it
   if (selectedLocation) {
+    const cityDisplay = selectedLocation.city || selectedLocation.address?.city;
     return (
       <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg border border-gray-200">
         <div className="flex items-center gap-2">
           <MapPin className="w-4 h-4 text-red-500" />
           <div>
             <p className="text-sm font-medium">{selectedLocation.name}</p>
-            {selectedLocation.city && (
-              <p className="text-xs text-gray-500">{selectedLocation.city}</p>
+            {cityDisplay && (
+              <p className="text-xs text-gray-500">{cityDisplay}</p>
             )}
           </div>
         </div>

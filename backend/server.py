@@ -2716,11 +2716,7 @@ async def search_locations(
     lng: Optional[float] = None,
     limit: int = 20
 ):
-    """Search for locations"""
-    user = await get_current_user(request)
-    if not user:
-        raise HTTPException(status_code=401, detail="Not authenticated")
-    
+    """Search for locations - public endpoint"""
     results = await location_service.search_locations(q, lat, lng, limit)
     return {"locations": results}
 
@@ -2732,11 +2728,7 @@ async def get_nearby_locations(
     radius: int = 1000,
     limit: int = 20
 ):
-    """Get locations near a point"""
-    user = await get_current_user(request)
-    if not user:
-        raise HTTPException(status_code=401, detail="Not authenticated")
-    
+    """Get locations near a point - public endpoint"""
     locations = await location_service.get_nearby_locations(lat, lng, radius, limit)
     return {"locations": locations}
 

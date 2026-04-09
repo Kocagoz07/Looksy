@@ -15,7 +15,6 @@ import {
 } from "@/components/ui/dialog";
 import CollaborationHub from "@/components/CollaborationHub";
 import BrandVerifiedBadge from "@/components/BrandVerifiedBadge";
-import MessageDialog from "@/components/MessageDialog";
 import axios from "axios";
 import { toast } from "sonner";
 
@@ -318,7 +317,6 @@ export default function UserProfile() {
   const [acceptedCollabs, setAcceptedCollabs] = useState([]);
   const [selectedPost, setSelectedPost] = useState(null);
   const [visiblePosts, setVisiblePosts] = useState(new Set());
-  const [messageDialogOpen, setMessageDialogOpen] = useState(false);
   
   const gridRef = useRef(null);
   const observerRef = useRef(null);
@@ -765,18 +763,6 @@ export default function UserProfile() {
                     )}
                   </Button>
                   
-                  {/* Direct Message Button */}
-                  <Button
-                    onClick={() => setMessageDialogOpen(true)}
-                    className="px-6 py-3 rounded-full font-manrope font-semibold flex items-center gap-2"
-                    variant="outline"
-                    style={{ borderColor: textColor, color: textColor }}
-                    data-testid="message-btn"
-                  >
-                    <MessageCircle className="w-4 h-4" />
-                    Message
-                  </Button>
-                  
                   {/* Simple Collaborate Button */}
                   <Button
                     onClick={() => setCollaborateOpen(true)}
@@ -792,14 +778,6 @@ export default function UserProfile() {
             </div>
           </div>
         </div>
-
-        {/* Message Dialog */}
-        <MessageDialog
-          isOpen={messageDialogOpen}
-          onClose={() => setMessageDialogOpen(false)}
-          targetUser={user}
-          currentUser={currentUser}
-        />
 
         {/* Accepted Collaborations - Shown on profile */}
         {acceptedCollabs.length > 0 && (
