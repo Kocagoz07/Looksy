@@ -452,7 +452,7 @@ async def send_otp(request: SendOTPRequest):
     else:
         # Production: Send via Twilio Verify
         try:
-            verification = twilio_client.verify.v2.services(
+            twilio_client.verify.v2.services(
                 os.environ.get('TWILIO_VERIFY_SERVICE_SID')
             ).verifications.create(to=phone, channel="sms")
             
@@ -691,7 +691,7 @@ async def login_with_password(request: EmailPasswordLogin, response: Response, r
         if not security_manager.check_rate_limit(ip, "login", LOGIN_RATE_LIMIT_MAX):
             await security_manager.log_security_event(
                 "login_rate_limited",
-                f"Login rate limit exceeded for IP",
+                "Login rate limit exceeded for IP",
                 ip=ip,
                 email=email
             )
@@ -1012,7 +1012,7 @@ async def get_image(file_id: str):
             io.BytesIO(grid_out.read()),
             media_type=grid_out.content_type or "image/jpeg"
         )
-    except:
+    except Exception:
         raise HTTPException(status_code=404, detail="Image not found")
 
 # Post endpoints
@@ -1672,7 +1672,7 @@ Respond in JSON format:
                 if response_text.startswith("json"):
                     response_text = response_text[4:]
             result = json.loads(response_text)
-        except:
+        except (json.JSONDecodeError, IndexError):
             result = {
                 "summary": response[:200] if len(response) > 200 else response,
                 "request_type": "General",
@@ -1810,7 +1810,7 @@ ONLY OUTPUT JSON, NO OTHER TEXT."""
                 confidence=result.get("confidence", 80)
             )
             
-        except json.JSONDecodeError as e:
+        except json.JSONDecodeError:
             logger.error(f"Failed to parse AI response: {response}")
             # Default to approved if AI response is malformed
             return BrandCheckResponse(
@@ -1879,7 +1879,7 @@ Provide 3 replies in JSON format:
                 if response_text.startswith("json"):
                     response_text = response_text[4:]
             result = json.loads(response_text)
-        except:
+        except (json.JSONDecodeError, IndexError):
             result = {
                 "replies": [
                     {"type": "accept", "text": f"Hi {reply_req.from_user_name}! Thank you for reaching out. I'd love to collaborate with you on this project. Let's discuss the details further."},
@@ -1948,7 +1948,7 @@ Respond in JSON:
                 if response_text.startswith("json"):
                     response_text = response_text[4:]
             result = json.loads(response_text)
-        except:
+        except (json.JSONDecodeError, IndexError):
             result = {
                 "overall_summary": f"You have {len(messages)} unread collaboration requests to review.",
                 "high_priority_count": 0,
@@ -2036,12 +2036,11 @@ async def get_rewards_info(request: Request):
     
     user_doc = await db.users.find_one(
         {"user_id": user.user_id},
-        {"_id": 0, "stars": 1, "payout_points": 1, "earnings": 1, "earnings_eur": 1, "kyc_verified": 1, "payout_method": 1}
+        {"_id": 0, "stars": 1, "payout_points": 1, "earnings_eur": 1, "kyc_verified": 1, "payout_method": 1}
     )
     
     stars = user_doc.get("stars", 0) if user_doc else 0
     payout_points = user_doc.get("payout_points", 0.0) if user_doc else 0.0
-    earnings = user_doc.get("earnings", 0.0) if user_doc else 0.0
     earnings_eur = user_doc.get("earnings_eur", 0.0) if user_doc else 0.0
     
     # Calculate potential conversion value (now returns EUR directly)
@@ -2120,7 +2119,7 @@ class KYCSubmission(BaseModel):
     id_number: str
 
 @api_router.post("/kyc/submit")
-async def submit_kyc(request: Request, kyc_data: KYCSubmission):
+async def submit_kyc_verification(request: Request, kyc_data: KYCSubmission):
     """Submit KYC verification documents"""
     user = await get_current_user(request)
     if not user:
@@ -2331,15 +2330,15 @@ async def get_payout_history(request: Request):
 async def stripe_webhook(request: Request):
     """Handle Stripe webhooks"""
     try:
-        body = await request.body()
-        signature = request.headers.get("Stripe-Signature")
+        payload = await request.body()
+        sig_header = request.headers.get("Stripe-Signature")
         
         stripe_api_key = os.environ.get('STRIPE_API_KEY')
         if not stripe_api_key:
             raise HTTPException(status_code=500, detail="Stripe not configured")
         
         # Process webhook (in production, verify signature and handle events)
-        logger.info(f"Received Stripe webhook")
+        logger.info(f"Received Stripe webhook, payload size: {len(payload)}, has signature: {bool(sig_header)}")
         
         return {"status": "received"}
     except Exception as e:
