@@ -2892,6 +2892,30 @@ async def unsave_location(request: Request, location_id: str):
         return {"message": "Location removed from favorites"}
     raise HTTPException(status_code=404, detail="Location not found in favorites")
 
+# Admin endpoint to clean up test data
+@api_router.delete("/admin/cleanup-test-data")
+async def cleanup_test_data():
+    """Delete all test data (posts, locations, users with TEST_ prefix)"""
+    results = {}
+    
+    # Delete test posts
+    post_result = await db.posts.delete_many({"caption": {"$regex": "TEST_", "$options": "i"}})
+    results["posts_deleted"] = post_result.deleted_count
+    
+    # Delete test locations  
+    loc_result = await db.locations.delete_many({"name": {"$regex": "TEST_", "$options": "i"}})
+    results["locations_deleted"] = loc_result.deleted_count
+    
+    # Delete test users
+    user_result = await db.users.delete_many({"name": {"$regex": "TEST_", "$options": "i"}})
+    results["users_deleted"] = user_result.deleted_count
+    
+    # Delete test post_locations
+    pl_result = await db.post_locations.delete_many({})
+    results["post_locations_deleted"] = pl_result.deleted_count
+    
+    return {"message": "Test data cleaned up", "results": results}
+
 # Include the router in the main app
 app.include_router(api_router)
 
