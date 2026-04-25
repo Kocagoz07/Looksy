@@ -359,24 +359,25 @@ def calculate_earnings(likes_count: int) -> float:
 # 1001-5000 stars: €0.10 per star
 # 5001-10000 stars: €0.25 per star
 # Max 10,000 stars per post
-def calculate_payout_points(stars: int) -> float:
-    """Convert stars to payout points (EUR value) - flat rate per tier"""
-    if stars <= 0:
+def calculate_payout_points(stars_to_convert: int, total_stars: int = None) -> float:
+    """Convert stars to payout points (EUR value) - tier based on total stars"""
+    if stars_to_convert <= 0:
         return 0.0
     
-    # Cap at 10,000 stars
-    stars = min(stars, 10000)
+    # Use total_stars to determine tier, or stars_to_convert if not provided
+    tier_stars = total_stars if total_stars is not None else stars_to_convert
+    tier_stars = min(tier_stars, 10000)
+    stars_to_convert = min(stars_to_convert, 10000)
     
-    # Determine tier and apply flat rate
-    if stars <= 1000:
-        # Tier 1: 0-1000 stars → €0.05 per star
-        return round(stars * 0.05, 2)
-    elif stars <= 5000:
-        # Tier 2: 1001-5000 stars → €0.10 per star (flat rate for ALL stars)
-        return round(stars * 0.10, 2)
+    # Determine rate based on user's total stars (tier)
+    if tier_stars <= 1000:
+        rate = 0.05  # Tier 1: €0.05 per star
+    elif tier_stars <= 5000:
+        rate = 0.10  # Tier 2: €0.10 per star
     else:
-        # Tier 3: 5001-10000 stars → €0.25 per star (flat rate for ALL stars)
-        return round(stars * 0.25, 2)
+        rate = 0.25  # Tier 3: €0.25 per star
+    
+    return round(stars_to_convert * rate, 2)
 
 # Auth helper
 async def get_current_user(request: Request) -> Optional[User]:
@@ -2043,8 +2044,8 @@ async def get_rewards_info(request: Request):
     payout_points = user_doc.get("payout_points", 0.0) if user_doc else 0.0
     earnings_eur = user_doc.get("earnings_eur", 0.0) if user_doc else 0.0
     
-    # Calculate potential conversion value (now returns EUR directly)
-    potential_value_eur = calculate_payout_points(stars)
+    # Calculate potential conversion value (pass stars as both to get value for all stars at current tier)
+    potential_value_eur = calculate_payout_points(stars, stars)
     
     # Min payout threshold
     min_threshold = float(os.environ.get('MIN_PAYOUT_THRESHOLD_EUR', '20.0'))
@@ -2083,8 +2084,8 @@ async def convert_stars_to_points(request: Request, convert_req: ConvertStarsReq
     if convert_req.stars_to_convert > current_stars:
         raise HTTPException(status_code=400, detail=f"Insufficient stars. You have {current_stars} stars.")
     
-    # Calculate payout points value (now returns EUR directly)
-    points_value_eur = calculate_payout_points(convert_req.stars_to_convert)
+    # Calculate payout points value based on user's TOTAL stars (determines tier)
+    points_value_eur = calculate_payout_points(convert_req.stars_to_convert, current_stars)
     
     # Update user's stars and payout points
     await db.users.update_one(
