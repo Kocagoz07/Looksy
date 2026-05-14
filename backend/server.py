@@ -1396,38 +1396,115 @@ async def request_payout(request: Request, payout_req: PayoutRequest):
     if payout_req.amount_eur < min_threshold:
         raise HTTPException(status_code=400, detail=f"Minimum payout is €{min_threshold}")
     
-    # Check available balance
-    available_balance = user_doc.get("earnings_eur", 0.0)
+    # Check available balance - use payout_points (converted from stars)
+    available_balance = user_doc.get("payout_points", 0.0)
     if payout_req.amount_eur > available_balance:
-        raise HTTPException(status_code=400, detail="Insufficient balance")
+        raise HTTPException(status_code=400, detail=f"Insufficient balance. Available: €{available_balance:.2f}")
     
     # Create payout record
     payout_id = f"payout_{uuid.uuid4().hex[:12]}"
-    payout = Payout(
-        payout_id=payout_id,
-        user_id=user.user_id,
-        amount_eur=payout_req.amount_eur,
-        method=user_doc["payout_method"],
-        status="pending",
-        payout_email=user_doc.get("payout_email")
-    )
+    now = datetime.now(timezone.utc)
     
-    payout_dict = payout.model_dump()
-    payout_dict["created_at"] = payout_dict["created_at"].isoformat()
-    await db.payouts.insert_one(payout_dict)
+    payout_record = {
+        "payout_id": payout_id,
+        "user_id": user.user_id,
+        "amount_eur": payout_req.amount_eur,
+        "method": user_doc["payout_method"],
+        "status": "pending",
+        "payout_email": user_doc.get("payout_email"),
+        "created_at": now.isoformat(),
+        "updated_at": now.isoformat(),
+        "notes": None
+    }
     
-    # Deduct from user balance (escrow until payout completes)
+    await db.payouts.insert_one(payout_record)
+    
+    # Deduct from user payout_points (escrow until payout completes)
     new_balance = available_balance - payout_req.amount_eur
     await db.users.update_one(
         {"user_id": user.user_id},
-        {"$set": {"earnings_eur": new_balance}}
+        {"$set": {"payout_points": new_balance}}
     )
     
+    logger.info(f"Payout requested: {payout_id} for €{payout_req.amount_eur} via {user_doc['payout_method']}")
+    
     return {
-        "message": "Payout requested successfully",
+        "message": "Payout requested successfully! Processing typically takes 3-5 business days.",
         "payout_id": payout_id,
-        "status": "pending"
+        "amount_eur": payout_req.amount_eur,
+        "method": user_doc["payout_method"],
+        "status": "pending",
+        "estimated_arrival": "3-5 business days"
     }
+
+# Admin endpoint to process payouts
+@api_router.post("/admin/process-payout/{payout_id}")
+async def admin_process_payout(payout_id: str, action: str = "approve", notes: Optional[str] = None):
+    """Admin endpoint to approve or reject payouts"""
+    payout = await db.payouts.find_one({"payout_id": payout_id}, {"_id": 0})
+    if not payout:
+        raise HTTPException(status_code=404, detail="Payout not found")
+    
+    if payout["status"] != "pending":
+        raise HTTPException(status_code=400, detail=f"Payout already {payout['status']}")
+    
+    now = datetime.now(timezone.utc).isoformat()
+    
+    if action == "approve":
+        # Mark as processing (in real system, would initiate actual transfer)
+        await db.payouts.update_one(
+            {"payout_id": payout_id},
+            {"$set": {"status": "processing", "updated_at": now, "notes": notes}}
+        )
+        return {"message": "Payout approved and processing", "payout_id": payout_id}
+    
+    elif action == "complete":
+        # Mark as completed
+        await db.payouts.update_one(
+            {"payout_id": payout_id},
+            {"$set": {"status": "completed", "completed_at": now, "updated_at": now, "notes": notes}}
+        )
+        return {"message": "Payout marked as completed", "payout_id": payout_id}
+    
+    elif action == "reject":
+        # Refund the amount back to user
+        user = await db.users.find_one({"user_id": payout["user_id"]}, {"_id": 0})
+        if user:
+            current_balance = user.get("payout_points", 0.0)
+            await db.users.update_one(
+                {"user_id": payout["user_id"]},
+                {"$set": {"payout_points": current_balance + payout["amount_eur"]}}
+            )
+        
+        await db.payouts.update_one(
+            {"payout_id": payout_id},
+            {"$set": {"status": "rejected", "updated_at": now, "notes": notes or "Payout rejected"}}
+        )
+        return {"message": "Payout rejected and amount refunded", "payout_id": payout_id}
+    
+    else:
+        raise HTTPException(status_code=400, detail="Invalid action. Use 'approve', 'complete', or 'reject'")
+
+# Get all pending payouts (admin)
+@api_router.get("/admin/pending-payouts")
+async def get_pending_payouts():
+    """Get all pending payouts for admin review"""
+    payouts = await db.payouts.find(
+        {"status": "pending"},
+        {"_id": 0}
+    ).sort("created_at", 1).to_list(100)
+    
+    # Enrich with user info
+    for payout in payouts:
+        user = await db.users.find_one(
+            {"user_id": payout["user_id"]},
+            {"_id": 0, "name": 1, "email": 1}
+        )
+        if user:
+            payout["user_name"] = user.get("name")
+            payout["user_email"] = user.get("email")
+    
+    return {"pending_payouts": payouts, "count": len(payouts)}
 
 @api_router.get("/users/me/payouts")
 async def get_my_payouts(request: Request):

@@ -157,10 +157,10 @@ export default function PayoutsPage() {
             <div>
               <p className="font-manrope text-sm opacity-90 mb-1">Available Balance</p>
               <p className="font-playfair text-5xl font-bold">
-                €{user?.earnings_eur?.toFixed(2) || '0.00'}
+                €{user?.payout_points?.toFixed(2) || '0.00'}
               </p>
               <p className="font-manrope text-sm opacity-75 mt-2">
-                ${user?.earnings?.toFixed(2) || '0.00'} USD
+                {user?.stars || 0} stars • Convert more in Rewards
               </p>
             </div>
             <Wallet className="w-16 h-16 opacity-20" />
