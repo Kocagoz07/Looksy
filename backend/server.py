@@ -1179,6 +1179,21 @@ async def toggle_like(request: Request, post_id: str):
     
     liked_by = post.get("liked_by", [])
     
+    # Check for fraud on new likes only
+    if user.user_id not in liked_by and fraud_service:
+        fraud_check = await fraud_service.check_like_abuse(
+            liker_id=user.user_id,
+            post_owner_id=post["user_id"],
+            post_id=post_id
+        )
+        
+        if not fraud_check.get("allowed", True):
+            logger.warning(f"Like blocked for user {user.user_id}: {fraud_check['flags']}")
+            raise HTTPException(
+                status_code=429, 
+                detail="Action temporarily blocked. Please try again later."
+            )
+    
     if user.user_id in liked_by:
         # Unlike
         await db.posts.update_one(
@@ -2993,6 +3008,96 @@ async def cleanup_test_data():
     results["post_locations_deleted"] = pl_result.deleted_count
     
     return {"message": "Test data cleaned up", "results": results}
+
+# ================= FRAUD DETECTION =================
+
+from fraud_detection import FraudDetectionService
+
+# Initialize fraud detection service
+fraud_service = None
+
+@app.on_event("startup")
+async def startup_fraud_detection():
+    global fraud_service
+    fraud_service = FraudDetectionService(db)
+    await fraud_service.initialize()
+    logger.info("Fraud detection service initialized")
+
+class DeviceFingerprintRequest(BaseModel):
+    user_agent: str
+    screen_resolution: str
+    timezone: str
+    language: str
+    platform: str
+    canvas_hash: Optional[str] = None
+    webgl_hash: Optional[str] = None
+    audio_hash: Optional[str] = None
+    fonts: Optional[str] = None
+
+@api_router.post("/security/fingerprint")
+async def record_fingerprint(request: Request, fingerprint: DeviceFingerprintRequest):
+    """Record device fingerprint during login/registration"""
+    user = await get_current_user(request)
+    if not user:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    
+    # Get client IP
+    ip_address = request.headers.get("X-Forwarded-For", request.client.host)
+    if ip_address and "," in ip_address:
+        ip_address = ip_address.split(",")[0].strip()
+    
+    result = await fraud_service.record_device_fingerprint(
+        user_id=user.user_id,
+        fingerprint_data=fingerprint.model_dump(),
+        ip_address=ip_address
+    )
+    
+    return result
+
+@api_router.get("/security/my-risk-score")
+async def get_my_risk_score(request: Request):
+    """Get current user's fraud risk score"""
+    user = await get_current_user(request)
+    if not user:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    
+    return await fraud_service.get_user_risk_score(user.user_id)
+
+@api_router.get("/admin/flagged-users")
+async def get_flagged_users(limit: int = 50):
+    """Admin: Get list of users flagged for potential fraud"""
+    return {"flagged_users": await fraud_service.get_flagged_users(limit)}
+
+@api_router.get("/admin/fraud-events")
+async def get_fraud_events(
+    user_id: Optional[str] = None,
+    event_type: Optional[str] = None,
+    limit: int = 100
+):
+    """Admin: Get fraud events log"""
+    events = await fraud_service.get_fraud_events(user_id, event_type, limit)
+    return {"events": events, "count": len(events)}
+
+@api_router.post("/admin/clear-user-flags/{user_id}")
+async def clear_user_flags(user_id: str):
+    """Admin: Clear fraud flags for a user"""
+    success = await fraud_service.clear_user_flags(user_id)
+    if success:
+        return {"message": f"Flags cleared for user {user_id}"}
+    raise HTTPException(status_code=404, detail="User not found")
+
+@api_router.post("/admin/flag-device")
+async def flag_device(fingerprint_hash: str, reason: str):
+    """Admin: Flag a device as fraudulent"""
+    success = await fraud_service.flag_device(fingerprint_hash, reason)
+    if success:
+        return {"message": "Device flagged successfully"}
+    raise HTTPException(status_code=404, detail="Device not found")
+
+@api_router.get("/admin/user-risk-score/{user_id}")
+async def get_user_risk_score_admin(user_id: str):
+    """Admin: Get risk score for any user"""
+    return await fraud_service.get_user_risk_score(user_id)
 
 # Include the router in the main app
 app.include_router(api_router)

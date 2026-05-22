@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import axios from "axios";
+import { sendFingerprint } from "../utils/fingerprint";
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 
@@ -25,6 +26,9 @@ export default function ProtectedRoute({ children }) {
         await axios.get(`${BACKEND_URL}/api/auth/me`, { withCredentials: true });
         if (isMounted) {
           setIsAuthenticated(true);
+          
+          // Send device fingerprint for fraud detection (non-blocking)
+          sendFingerprint().catch(err => console.warn('Fingerprint failed:', err));
         }
       } catch (err) {
         if (isMounted) {
