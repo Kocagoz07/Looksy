@@ -2507,15 +2507,24 @@ import json as json_module
 # Initialize chat manager
 chat_manager = None
 location_service = None
+outfit_generator = None
+affiliate_engine = None
 
 @app.on_event("startup")
 async def startup_chat_and_location():
-    global chat_manager, location_service
+    global chat_manager, location_service, outfit_generator, affiliate_engine
     chat_manager = ChatManager(db)
     await chat_manager.initialize()
     location_service = LocationService(db)
     await location_service.initialize()
-    logger.info("Chat manager and Location service initialized")
+
+    from outfit_generator import OutfitGenerator
+    from affiliate_engine import AffiliateEngine
+    outfit_generator = OutfitGenerator(db)
+    await outfit_generator.initialize()
+    affiliate_engine = AffiliateEngine(db)
+    await affiliate_engine.initialize()
+    logger.info("Chat, Location, Outfit, and Affiliate services initialized")
 
 # WebSocket endpoint for real-time chat
 @app.websocket("/ws/chat")
@@ -3098,6 +3107,204 @@ async def flag_device(fingerprint_hash: str, reason: str):
 async def get_user_risk_score_admin(user_id: str):
     """Admin: Get risk score for any user"""
     return await fraud_service.get_user_risk_score(user_id)
+
+# ================= AI OUTFIT GENERATOR & SMART AFFILIATE ENGINE =================
+
+class OutfitGenerateRequest(BaseModel):
+    occasion: str = "everyday"
+    style: str = "casual"
+    season: str = "all-season"
+    budget: Optional[str] = None
+    color_preference: Optional[str] = None
+    additional_notes: Optional[str] = None
+    include_affiliate_links: bool = True
+
+
+class StyleProfileRequest(BaseModel):
+    favorite_styles: List[str] = []
+    favorite_colors: List[str] = []
+    body_type: Optional[str] = None
+    sizes: Dict[str, str] = {}
+    avoid: List[str] = []
+    budget_preference: Optional[str] = None
+
+
+class AffiliateSuggestRequest(BaseModel):
+    items: List[Dict]
+    budget: Optional[str] = None
+    outfit_id: Optional[str] = None
+    post_id: Optional[str] = None
+    persist: bool = True
+
+
+@api_router.post("/outfits/generate")
+async def generate_outfit(payload: OutfitGenerateRequest, request: Request):
+    user = await get_current_user(request)
+    if not user:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    if not outfit_generator:
+        raise HTTPException(status_code=503, detail="Outfit generator not ready")
+
+    try:
+        result = await outfit_generator.generate_outfit(
+            user_id=user.user_id,
+            occasion=payload.occasion,
+            style=payload.style,
+            season=payload.season,
+            budget=payload.budget,
+            color_preference=payload.color_preference,
+            additional_notes=payload.additional_notes,
+        )
+    except ValueError as ve:
+        raise HTTPException(status_code=400, detail=str(ve))
+
+    # Optionally generate affiliate links for the outfit items
+    if payload.include_affiliate_links and affiliate_engine:
+        items = result.get("outfit", {}).get("items", []) or []
+        try:
+            suggestions = await affiliate_engine.suggest_for_items(
+                items=items, user_id=user.user_id, budget=payload.budget
+            )
+            links = await affiliate_engine.create_links(
+                user_id=user.user_id,
+                suggestions=suggestions,
+                outfit_id=result["outfit_id"],
+            )
+            result["affiliate_links"] = links
+        except Exception as e:
+            logger.warning(f"Affiliate link generation failed: {e}")
+            result["affiliate_links"] = []
+
+    return result
+
+
+@api_router.get("/outfits/mine")
+async def my_outfits(request: Request, limit: int = 20):
+    user = await get_current_user(request)
+    if not user:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    outfits = await outfit_generator.get_user_outfits(user.user_id, limit)
+    return {"outfits": outfits, "count": len(outfits)}
+
+
+@api_router.post("/outfits/{outfit_id}/save")
+async def save_outfit(outfit_id: str, request: Request):
+    user = await get_current_user(request)
+    if not user:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    success = await outfit_generator.save_outfit(user.user_id, outfit_id)
+    if not success:
+        raise HTTPException(status_code=404, detail="Outfit not found")
+    return {"saved": True, "outfit_id": outfit_id}
+
+
+@api_router.get("/outfits/style-profile")
+async def get_style_profile(request: Request):
+    user = await get_current_user(request)
+    if not user:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    profile = await outfit_generator.get_user_style_profile(user.user_id)
+    return profile or {"user_id": user.user_id}
+
+
+@api_router.put("/outfits/style-profile")
+async def update_style_profile(payload: StyleProfileRequest, request: Request):
+    user = await get_current_user(request)
+    if not user:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    updated = await outfit_generator.update_user_style_profile(
+        user.user_id, payload.model_dump()
+    )
+    return updated
+
+
+@api_router.get("/outfits/trending")
+async def trending_styles(limit: int = 10):
+    return {"trending": await outfit_generator.get_trending_styles(limit)}
+
+
+@api_router.get("/outfits/options")
+async def outfit_options():
+    """Static options for the UI (style, occasion, season categories)."""
+    from outfit_generator import OutfitGenerator as OG
+    return {
+        "styles": OG.STYLE_CATEGORIES,
+        "occasions": OG.OCCASIONS,
+        "seasons": OG.SEASONS,
+    }
+
+
+# --------- Smart Affiliate Engine ---------
+
+@api_router.post("/affiliate/suggest")
+async def affiliate_suggest(payload: AffiliateSuggestRequest, request: Request):
+    user = await get_current_user(request)
+    if not user:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    if not affiliate_engine:
+        raise HTTPException(status_code=503, detail="Affiliate engine not ready")
+
+    suggestions = await affiliate_engine.suggest_for_items(
+        items=payload.items, user_id=user.user_id, budget=payload.budget
+    )
+    links: List[Dict] = []
+    if payload.persist:
+        links = await affiliate_engine.create_links(
+            user_id=user.user_id,
+            suggestions=suggestions,
+            outfit_id=payload.outfit_id,
+            post_id=payload.post_id,
+        )
+    return {"suggestions": suggestions, "links": links}
+
+
+@api_router.get("/affiliate/track/{link_id}")
+async def affiliate_track(link_id: str, request: Request):
+    """Track a click and redirect to the retailer. Public endpoint."""
+    user = await get_current_user(request)
+    ip = request.client.host if request.client else None
+    device = request.headers.get("X-Device-Fingerprint")
+    try:
+        result = await affiliate_engine.track_click(
+            link_id=link_id,
+            clicker_user_id=user.user_id if user else None,
+            ip_address=ip,
+            device_fingerprint=device,
+            fraud_service=fraud_service,
+        )
+    except ValueError as ve:
+        raise HTTPException(status_code=404, detail=str(ve))
+
+    from fastapi.responses import RedirectResponse
+    return RedirectResponse(url=result["target_url"], status_code=302)
+
+
+@api_router.get("/affiliate/my-links")
+async def my_affiliate_links(request: Request, limit: int = 50):
+    user = await get_current_user(request)
+    if not user:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    links = await affiliate_engine.get_links_for_user(user.user_id, limit)
+    return {"links": links, "count": len(links)}
+
+
+@api_router.get("/affiliate/my-stats")
+async def my_affiliate_stats(request: Request):
+    user = await get_current_user(request)
+    if not user:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    return await affiliate_engine.get_user_stats(user.user_id)
+
+
+@api_router.get("/affiliate/outfit/{outfit_id}")
+async def affiliate_for_outfit(outfit_id: str):
+    return {"links": await affiliate_engine.get_links_for_outfit(outfit_id)}
+
+
+@api_router.get("/affiliate/post/{post_id}")
+async def affiliate_for_post(post_id: str):
+    return {"links": await affiliate_engine.get_links_for_post(post_id)}
+
 
 # Include the router in the main app
 app.include_router(api_router)

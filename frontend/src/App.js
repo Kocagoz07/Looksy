@@ -12,6 +12,7 @@ import FavoritesPage from "@/pages/FavoritesPage";
 import CelebrityPage from "@/pages/CelebrityPage";
 import RewardsPage from "@/pages/RewardsPage";
 import ChatPage from "@/pages/ChatPage";
+import OutfitGeneratorPage from "@/pages/OutfitGeneratorPage";
 import ProtectedRoute from "@/components/ProtectedRoute";
 import { Toaster } from "@/components/ui/sonner";
 
@@ -35,6 +36,7 @@ function AppContent() {
       <Route path="/rewards" element={<ProtectedRoute><RewardsPage /></ProtectedRoute>} />
       <Route path="/chat" element={<ProtectedRoute><ChatPage /></ProtectedRoute>} />
       <Route path="/chat/:conversationId" element={<ProtectedRoute><ChatPage /></ProtectedRoute>} />
+      <Route path="/outfit-studio" element={<ProtectedRoute><OutfitGeneratorPage /></ProtectedRoute>} />
     </Routes>
   );
 }
