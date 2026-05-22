@@ -56,6 +56,34 @@ Build a fashion social media application named "Looksy" similar to Instagram wit
 
 ## What's Been Implemented
 
+### Session: May 22, 2026
+
+**Completed Features:**
+
+1. **AI Outfit Generator** (`/app/backend/outfit_generator.py`)
+   - GPT-4o-mini via emergentintegrations (Emergent LLM Key)
+   - Personalized outfits based on occasion / style / season / budget / colors / notes
+   - User style profile (favorite_styles, favorite_colors, body_type, avoid, sizes, budget_preference)
+   - Outfit history, save-to-collection, trending styles aggregation
+   - `/outfit-studio` page (`OutfitGeneratorPage.js`) accessible from Dashboard via `Wand2` icon
+
+2. **Smart Affiliate Engine** (`/app/backend/affiliate_engine.py`)
+   - AI-recommended retailers + search queries per outfit item (gpt-4o-mini)
+   - Fallback to 5 default retailers (Amazon / ASOS / Zalando / Farfetch / Nordstrom)
+   - Trackable affiliate links with click tracking, suspicious-click flagging (reuses fraud_service)
+   - Per-user stats: total_links, total_clicks, total_conversions, total_earnings_eur
+   - Endpoints auth-gated; outfit/post link lookups filter by ownership to prevent data leaks
+
+**New API Endpoints:**
+- Outfits: `POST /api/outfits/generate`, `GET /api/outfits/mine`, `POST /api/outfits/{id}/save`, `GET/PUT /api/outfits/style-profile`, `GET /api/outfits/options`, `GET /api/outfits/trending`
+- Affiliate: `POST /api/affiliate/suggest`, `GET /api/affiliate/track/{link_id}` (302 redirect), `GET /api/affiliate/my-links`, `GET /api/affiliate/my-stats`, `GET /api/affiliate/outfit/{outfit_id}`, `GET /api/affiliate/post/{post_id}` (both ownership-filtered)
+
+**Testing:**
+- 26/26 backend tests passed (`/app/test_reports/iteration_7.json`, `/app/backend/tests/test_outfit_affiliate.py`)
+- Frontend smoke-tested at `/outfit-studio`
+
+---
+
 ### Session: April 5, 2026
 
 **Completed Features:**
@@ -215,6 +243,8 @@ Build a fashion social media application named "Looksy" similar to Instagram wit
 - [x] Real-Time Chat System
 - [x] Photo Location Feature
 - [x] In-Profile Message Dialog
+- [x] AI Outfit Generator (gpt-4o-mini)
+- [x] Smart Affiliate Engine (AI retailer matching + click tracking)
 
 ### P1 - Medium Priority
 - [ ] Real Stripe/PayPal integration (currently mocked)

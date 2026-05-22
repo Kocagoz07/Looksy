@@ -3297,13 +3297,22 @@ async def my_affiliate_stats(request: Request):
 
 
 @api_router.get("/affiliate/outfit/{outfit_id}")
-async def affiliate_for_outfit(outfit_id: str):
-    return {"links": await affiliate_engine.get_links_for_outfit(outfit_id)}
+async def affiliate_for_outfit(outfit_id: str, request: Request):
+    user = await get_current_user(request)
+    if not user:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    links = await affiliate_engine.get_links_for_outfit(outfit_id)
+    # Only return links the requesting user owns
+    return {"links": [l for l in links if l.get("user_id") == user.user_id]}
 
 
 @api_router.get("/affiliate/post/{post_id}")
-async def affiliate_for_post(post_id: str):
-    return {"links": await affiliate_engine.get_links_for_post(post_id)}
+async def affiliate_for_post(post_id: str, request: Request):
+    user = await get_current_user(request)
+    if not user:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    links = await affiliate_engine.get_links_for_post(post_id)
+    return {"links": [l for l in links if l.get("user_id") == user.user_id]}
 
 
 # Include the router in the main app
