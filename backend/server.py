@@ -1433,22 +1433,71 @@ async def request_payout(request: Request, payout_req: PayoutRequest):
     }
     
     await db.payouts.insert_one(payout_record)
-    
+
     # Deduct from user payout_points (escrow until payout completes)
     new_balance = available_balance - payout_req.amount_eur
     await db.users.update_one(
         {"user_id": user.user_id},
         {"$set": {"payout_points": new_balance}}
     )
-    
+
     logger.info(f"Payout requested: {payout_id} for €{payout_req.amount_eur} via {user_doc['payout_method']}")
-    
+
+    # ---- Attempt LIVE provider transfer if configured ----
+    live_result = {"provider_attempted": False}
+    method = user_doc["payout_method"]
+    try:
+        if method == "stripe" and stripe_connect_provider and stripe_connect_provider.configured:
+            transfer = await stripe_connect_provider.create_transfer(
+                user_id=user.user_id,
+                amount_eur=payout_req.amount_eur,
+                description=f"Looksy payout {payout_id}",
+            )
+            await db.payouts.update_one(
+                {"payout_id": payout_id},
+                {"$set": {
+                    "status": "processing",
+                    "stripe_transfer_id": transfer["transfer_id"],
+                    "updated_at": datetime.now(timezone.utc).isoformat(),
+                }},
+            )
+            live_result = {"provider_attempted": True, "provider": "stripe", "transfer_id": transfer["transfer_id"]}
+        elif method == "paypal" and paypal_payouts_provider and paypal_payouts_provider.configured:
+            batch = await paypal_payouts_provider.create_payout(
+                user_id=user.user_id,
+                email=user_doc.get("payout_email"),
+                amount_eur=payout_req.amount_eur,
+                note=f"Looksy payout {payout_id}",
+            )
+            await db.payouts.update_one(
+                {"payout_id": payout_id},
+                {"$set": {
+                    "status": "processing",
+                    "paypal_batch_id": batch["payout_batch_id"],
+                    "updated_at": datetime.now(timezone.utc).isoformat(),
+                }},
+            )
+            live_result = {"provider_attempted": True, "provider": "paypal", "batch_id": batch["payout_batch_id"]}
+    except Exception as e:
+        logger.error(f"Live payout failed for {payout_id}: {e}")
+        # Refund the deducted balance since the provider call failed
+        await db.users.update_one(
+            {"user_id": user.user_id},
+            {"$set": {"payout_points": available_balance}},
+        )
+        await db.payouts.update_one(
+            {"payout_id": payout_id},
+            {"$set": {"status": "failed", "failure_message": str(e), "updated_at": datetime.now(timezone.utc).isoformat()}},
+        )
+        raise HTTPException(status_code=502, detail=f"Payout provider error: {e}")
+
     return {
         "message": "Payout requested successfully! Processing typically takes 3-5 business days.",
         "payout_id": payout_id,
         "amount_eur": payout_req.amount_eur,
         "method": user_doc["payout_method"],
-        "status": "pending",
+        "status": "processing" if live_result["provider_attempted"] else "pending",
+        "live": live_result,
         "estimated_arrival": "3-5 business days"
     }
 
@@ -2509,10 +2558,13 @@ chat_manager = None
 location_service = None
 outfit_generator = None
 affiliate_engine = None
+stripe_connect_provider = None
+paypal_payouts_provider = None
 
 @app.on_event("startup")
 async def startup_chat_and_location():
     global chat_manager, location_service, outfit_generator, affiliate_engine
+    global stripe_connect_provider, paypal_payouts_provider
     chat_manager = ChatManager(db)
     await chat_manager.initialize()
     location_service = LocationService(db)
@@ -2520,11 +2572,14 @@ async def startup_chat_and_location():
 
     from outfit_generator import OutfitGenerator
     from affiliate_engine import AffiliateEngine
+    from payouts_providers import StripeConnectProvider, PayPalPayoutsProvider
     outfit_generator = OutfitGenerator(db)
     await outfit_generator.initialize()
     affiliate_engine = AffiliateEngine(db)
     await affiliate_engine.initialize()
-    logger.info("Chat, Location, Outfit, and Affiliate services initialized")
+    stripe_connect_provider = StripeConnectProvider(db)
+    paypal_payouts_provider = PayPalPayoutsProvider(db)
+    logger.info("Chat, Location, Outfit, Affiliate, and Payout providers initialized")
 
 # WebSocket endpoint for real-time chat
 @app.websocket("/ws/chat")
@@ -3303,7 +3358,7 @@ async def affiliate_for_outfit(outfit_id: str, request: Request):
         raise HTTPException(status_code=401, detail="Not authenticated")
     links = await affiliate_engine.get_links_for_outfit(outfit_id)
     # Only return links the requesting user owns
-    return {"links": [l for l in links if l.get("user_id") == user.user_id]}
+    return {"links": [link for link in links if link.get("user_id") == user.user_id]}
 
 
 @api_router.get("/affiliate/post/{post_id}")
@@ -3312,7 +3367,145 @@ async def affiliate_for_post(post_id: str, request: Request):
     if not user:
         raise HTTPException(status_code=401, detail="Not authenticated")
     links = await affiliate_engine.get_links_for_post(post_id)
-    return {"links": [l for l in links if l.get("user_id") == user.user_id]}
+    return {"links": [link for link in links if link.get("user_id") == user.user_id]}
+
+
+# ================= LIVE PAYOUTS: STRIPE CONNECT EXPRESS & PAYPAL =================
+
+@api_router.get("/payouts/providers/status")
+async def payouts_providers_status():
+    """Public: shows which payout providers are configured."""
+    return {
+        "stripe": {
+            "configured": bool(stripe_connect_provider and stripe_connect_provider.configured),
+            "webhook_secret_set": bool(
+                stripe_connect_provider and stripe_connect_provider.webhook_secret
+            ),
+        },
+        "paypal": {
+            "configured": bool(paypal_payouts_provider and paypal_payouts_provider.configured),
+            "mode": paypal_payouts_provider.mode if paypal_payouts_provider else None,
+            "webhook_id_set": bool(
+                paypal_payouts_provider and paypal_payouts_provider.webhook_id
+            ),
+        },
+    }
+
+
+@api_router.post("/payouts/stripe/connect")
+async def stripe_connect_create(request: Request):
+    """Create an Express connected account for the current user."""
+    user = await get_current_user(request)
+    if not user:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    try:
+        result = await stripe_connect_provider.create_express_account(
+            user_id=user.user_id, email=user.email
+        )
+        return result
+    except RuntimeError as e:
+        raise HTTPException(status_code=503, detail=str(e))
+    except Exception as e:
+        logger.error(f"Stripe account creation failed: {e}")
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@api_router.post("/payouts/stripe/onboarding-link")
+async def stripe_connect_onboarding_link(request: Request):
+    """Generate a Stripe-hosted onboarding URL for the current user."""
+    user = await get_current_user(request)
+    if not user:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    try:
+        url = await stripe_connect_provider.create_onboarding_link(user.user_id)
+        return {"url": url}
+    except RuntimeError as e:
+        raise HTTPException(status_code=503, detail=str(e))
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@api_router.get("/payouts/stripe/status")
+async def stripe_connect_status(request: Request):
+    user = await get_current_user(request)
+    if not user:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    try:
+        return await stripe_connect_provider.get_account_status(user.user_id)
+    except RuntimeError as e:
+        raise HTTPException(status_code=503, detail=str(e))
+
+
+@api_router.post("/payouts/stripe/webhook")
+async def stripe_payouts_webhook(request: Request):
+    """Stripe webhook for account.updated, payout.paid, payout.failed, transfer.*"""
+    payload = await request.body()
+    sig = request.headers.get("Stripe-Signature", "")
+    try:
+        event = stripe_connect_provider.verify_webhook(payload, sig)
+    except Exception as e:
+        logger.warning(f"Stripe webhook signature failed: {e}")
+        raise HTTPException(status_code=400, detail="Invalid signature")
+
+    event_type = event.get("type", "")
+    data = event.get("data", {}).get("object", {})
+    logger.info(f"Stripe webhook: {event_type}")
+
+    if event_type == "account.updated":
+        await db.users.update_many(
+            {"stripe_account_id": data.get("id")},
+            {"$set": {
+                "stripe_charges_enabled": bool(data.get("charges_enabled")),
+                "stripe_payouts_enabled": bool(data.get("payouts_enabled")),
+                "stripe_details_submitted": bool(data.get("details_submitted")),
+            }},
+        )
+    elif event_type in ("transfer.created", "transfer.paid"):
+        await db.payouts.update_many(
+            {"stripe_transfer_id": data.get("id")},
+            {"$set": {"status": "succeeded" if event_type == "transfer.paid" else "processing"}},
+        )
+    elif event_type == "payout.failed":
+        await db.payouts.update_many(
+            {"stripe_transfer_id": data.get("id")},
+            {"$set": {
+                "status": "failed",
+                "failure_message": data.get("failure_message"),
+            }},
+        )
+
+    return {"received": True}
+
+
+# ---------- PayPal ----------
+
+@api_router.post("/payouts/paypal/webhook")
+async def paypal_payouts_webhook(request: Request):
+    body_bytes = await request.body()
+    body_str = body_bytes.decode("utf-8")
+    headers = {k.lower(): v for k, v in request.headers.items()}
+    try:
+        verified = await paypal_payouts_provider.verify_webhook(headers, body_str)
+    except RuntimeError as e:
+        raise HTTPException(status_code=503, detail=str(e))
+    if not verified:
+        raise HTTPException(status_code=400, detail="Invalid PayPal webhook signature")
+
+    event = json_module.loads(body_str)
+    event_type = event.get("event_type", "")
+    resource = event.get("resource", {})
+    logger.info(f"PayPal webhook: {event_type}")
+    if event_type == "PAYMENT.PAYOUTS-ITEM.SUCCEEDED":
+        await db.payouts.update_many(
+            {"paypal_batch_id": resource.get("payout_batch_id")},
+            {"$set": {"status": "succeeded"}},
+        )
+    elif event_type == "PAYMENT.PAYOUTS-ITEM.FAILED":
+        await db.payouts.update_many(
+            {"paypal_batch_id": resource.get("payout_batch_id")},
+            {"$set": {"status": "failed", "failure_message": resource.get("errors")}},
+        )
+    return {"received": True}
 
 
 # Include the router in the main app

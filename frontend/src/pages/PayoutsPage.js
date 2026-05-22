@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { ArrowLeft, CheckCircle, XCircle, Clock, DollarSign, Wallet } from "lucide-react";
+import { ArrowLeft, CheckCircle, XCircle, Clock, DollarSign, Wallet, ExternalLink, AlertCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -49,24 +49,70 @@ export default function PayoutsPage() {
   // Request Payout Form
   const [payoutAmount, setPayoutAmount] = useState("");
 
+  // Live providers
+  const [providersStatus, setProvidersStatus] = useState(null);
+  const [stripeStatus, setStripeStatus] = useState(null);
+  const [stripeConnecting, setStripeConnecting] = useState(false);
+
   useEffect(() => {
     fetchData();
   }, []);
 
   const fetchData = async () => {
     try {
-      const [userRes, payoutsRes] = await Promise.all([
+      const [userRes, payoutsRes, providersRes] = await Promise.all([
         axios.get(`${BACKEND_URL}/api/auth/me`, { withCredentials: true }),
-        axios.get(`${BACKEND_URL}/api/users/me/payouts`, { withCredentials: true })
+        axios.get(`${BACKEND_URL}/api/users/me/payouts`, { withCredentials: true }),
+        axios.get(`${BACKEND_URL}/api/payouts/providers/status`).catch(() => ({ data: null })),
       ]);
-      
+
       setUser(userRes.data);
       setPayouts(payoutsRes.data);
+      setProvidersStatus(providersRes.data);
+
+      // If Stripe is configured, fetch Stripe Connect status for this user
+      if (providersRes.data?.stripe?.configured) {
+        try {
+          const statusRes = await axios.get(
+            `${BACKEND_URL}/api/payouts/stripe/status`,
+            { withCredentials: true }
+          );
+          setStripeStatus(statusRes.data);
+        } catch (e) {
+          // ignore
+        }
+      }
     } catch (err) {
       console.error("Error fetching data:", err);
       toast.error("Failed to load payout information");
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleStripeConnect = async () => {
+    setStripeConnecting(true);
+    try {
+      // Create account if missing
+      if (!stripeStatus?.connected) {
+        await axios.post(
+          `${BACKEND_URL}/api/payouts/stripe/connect`,
+          {},
+          { withCredentials: true }
+        );
+      }
+      // Get hosted onboarding link
+      const linkRes = await axios.post(
+        `${BACKEND_URL}/api/payouts/stripe/onboarding-link`,
+        {},
+        { withCredentials: true }
+      );
+      window.location.href = linkRes.data.url;
+    } catch (err) {
+      const detail = err?.response?.data?.detail || "Stripe Connect setup failed";
+      toast.error(detail);
+    } finally {
+      setStripeConnecting(false);
     }
   };
 
@@ -218,6 +264,59 @@ export default function PayoutsPage() {
             </Button>
           </div>
         </div>
+
+        {/* Live providers banner */}
+        {providersStatus && !providersStatus.stripe.configured && !providersStatus.paypal.configured && (
+          <div className="rounded-lg border border-amber-200 bg-amber-50 p-4 flex items-start gap-3" data-testid="providers-not-configured">
+            <AlertCircle className="w-5 h-5 text-amber-600 mt-0.5" />
+            <div className="text-sm text-amber-800">
+              <strong>Live payouts not yet configured.</strong> Payouts will be queued
+              internally until Stripe Connect or PayPal Payouts API keys are added to the
+              server.
+            </div>
+          </div>
+        )}
+
+        {/* Stripe Connect Onboarding Card */}
+        {providersStatus?.stripe?.configured && (
+          <div className="border rounded-lg p-6" data-testid="stripe-connect-card">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="font-playfair text-lg font-semibold">Stripe Connect</h3>
+              {stripeStatus?.payouts_enabled ? (
+                <CheckCircle className="w-6 h-6 text-green-600" />
+              ) : (
+                <Clock className="w-6 h-6 text-gray-400" />
+              )}
+            </div>
+            <p className="font-manrope text-sm text-gray-600 mb-4">
+              {stripeStatus?.payouts_enabled
+                ? "Your Stripe payouts are active. Funds will land in your linked bank account."
+                : stripeStatus?.connected
+                ? "Onboarding incomplete. Continue to finalize identity + bank details."
+                : "Connect your Stripe account to receive EUR payouts directly to your bank."}
+            </p>
+            {!stripeStatus?.payouts_enabled && (
+              <Button
+                onClick={handleStripeConnect}
+                disabled={stripeConnecting}
+                className="w-full bg-[#635BFF] hover:bg-[#4F46E5] text-white"
+                data-testid="stripe-connect-btn"
+              >
+                {stripeConnecting ? "Opening Stripe..." : (
+                  <>
+                    {stripeStatus?.connected ? "Continue Stripe Onboarding" : "Connect Stripe"}
+                    <ExternalLink className="w-4 h-4 ml-2" />
+                  </>
+                )}
+              </Button>
+            )}
+            {stripeStatus?.requirements && stripeStatus.requirements.length > 0 && (
+              <div className="mt-3 text-xs text-amber-700">
+                Pending: {stripeStatus.requirements.slice(0, 3).join(", ")}
+              </div>
+            )}
+          </div>
+        )}
 
         {/* Request Payout Button */}
         {user?.kyc_verified && user?.payout_method && (
