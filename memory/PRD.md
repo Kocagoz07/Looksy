@@ -56,6 +56,31 @@ Build a fashion social media application named "Looksy" similar to Instagram wit
 
 ## What's Been Implemented
 
+### Session: May 22, 2026 (cont.)
+
+**Live Payouts Scaffolded (Stripe Connect Express + PayPal Payouts API):**
+- `/app/backend/payouts_providers.py`: `StripeConnectProvider` + `PayPalPayoutsProvider`
+  - Both auto-detect configured vs placeholder keys; unconfigured calls return 503 with actionable error
+  - Stripe: `create_express_account`, hosted onboarding `AccountLink`, account status (charges/payouts/details + currently_due requirements), EUR `Transfer` to creator account, webhook signature verification
+  - PayPal: OAuth2 client-credentials token flow, payout batch creation (`/v1/payments/payouts`), batch status polling, webhook signature verification via `/v1/notifications/verify-webhook-signature`
+- `/api/users/me/request-payout` now attempts live transfer when method matches a configured provider; rolls back `payout_points` deduction on failure
+- Frontend `PayoutsPage.js`: live providers banner + conditional **Connect Stripe** card
+- New endpoints:
+  - `GET /api/payouts/providers/status` (public)
+  - `POST /api/payouts/stripe/connect` (auth)
+  - `POST /api/payouts/stripe/onboarding-link` (auth)
+  - `GET /api/payouts/stripe/status` (auth)
+  - `POST /api/payouts/stripe/webhook` (Stripe-signed)
+  - `POST /api/payouts/paypal/webhook` (PayPal-signed)
+- **Required env vars** (paste into `/app/backend/.env` to go live):
+  - `STRIPE_API_KEY=sk_live_...` (or `sk_test_...`)
+  - `STRIPE_WEBHOOK_SECRET=whsec_...`
+  - `STRIPE_RETURN_URL`, `STRIPE_REFRESH_URL` (default uses `FRONTEND_URL`)
+  - `PAYPAL_CLIENT_ID`, `PAYPAL_CLIENT_SECRET`
+  - `PAYPAL_MODE=live` (or `sandbox`)
+  - `PAYPAL_WEBHOOK_ID=...`
+- **Tested**: 14/14 backend tests pass (`/app/test_reports/iteration_8.json`, `/app/backend/tests/test_live_payouts.py`)
+
 ### Session: May 22, 2026
 
 **Completed Features:**

@@ -262,10 +262,10 @@ class PayPalPayoutsProvider:
 
     async def verify_webhook(self, headers: Dict[str, str], body_str: str) -> bool:
         """Call PayPal's verify-webhook-signature API to validate event authenticity."""
+        self._require_configured()
         if not self.webhook_id:
             logger.warning("PAYPAL_WEBHOOK_ID not set — skipping verification")
             return False
-        self._require_configured()
         token = await self._get_token()
         verify_body = {
             "auth_algo": headers.get("paypal-auth-algo") or headers.get("PAYPAL-AUTH-ALGO"),

@@ -1478,6 +1478,12 @@ async def request_payout(request: Request, payout_req: PayoutRequest):
                 }},
             )
             live_result = {"provider_attempted": True, "provider": "paypal", "batch_id": batch["payout_batch_id"]}
+        else:
+            logger.info(
+                f"Live payout skipped for {payout_id}: method={method}, "
+                f"stripe_configured={bool(stripe_connect_provider and stripe_connect_provider.configured)}, "
+                f"paypal_configured={bool(paypal_payouts_provider and paypal_payouts_provider.configured)}"
+            )
     except Exception as e:
         logger.error(f"Live payout failed for {payout_id}: {e}")
         # Refund the deducted balance since the provider call failed
