@@ -153,10 +153,10 @@ const ChatPage = ({ user }) => {
       }
     };
 
-    if (user) {
+    if (currentUser) {
       fetchConversations();
     }
-  }, [user]);
+  }, [currentUser]);
 
   // Fetch current user if not passed
   useEffect(() => {
