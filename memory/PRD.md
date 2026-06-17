@@ -56,6 +56,20 @@ Build a fashion social media application named "Looksy" similar to Instagram wit
 
 ## What's Been Implemented
 
+### Session: Jun 17, 2026 — Live currency rate + modular routes
+
+- **Live USD→EUR rate** via `open.er-api.com` (free, no API key). New `/app/backend/currency.py` with in-memory 1-hour TTL cache and a background refresh loop. The sync `usd_to_eur()` helper used by post pricing, earnings, and payout endpoints reads the cached value (no behavioural change for callers). At session time the live rate was **0.8613** (vs the old hardcoded 0.92).
+  - `GET /api/currency/rate` (public): returns `{rate, source, fetched_at, ttl_hours}`
+  - `POST /api/currency/refresh` (auth): force a rate refresh
+- **Refactor**: extracted 4 route modules from `server.py` (3553 → 3211 lines, -342):
+  - `/app/backend/routes/outfits.py`
+  - `/app/backend/routes/affiliate.py`
+  - `/app/backend/routes/payouts_live.py`
+  - `/app/backend/routes/currency.py`
+  - Shared singletons live in `/app/backend/deps.py`; `server.py` populates them in the startup event, route modules read from there.
+- **Stripe webhook polish**: unconfigured provider now returns **503** (with the env-var hint) instead of misleading 400 "Invalid signature".
+- **Tested**: 60/60 backend tests pass (`/app/test_reports/iteration_9.json`). Currency live, modular routes verified end-to-end, request-payout regression validates EUR→USD division now uses the live 0.8613 rate.
+
 ### Session: Jun 17, 2026 — AI Outfit Studio UX fixes
 
 - **Recent generations are now clickable**: tapping reopens the outfit and restores Occasion/Style/Season/Budget/Colors/Notes form values so users can tweak & regenerate. Backend `GET /api/outfits/{outfit_id}` added (includes original `request` + `affiliate_links`, ownership-checked).

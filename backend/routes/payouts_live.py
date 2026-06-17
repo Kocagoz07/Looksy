@@ -78,6 +78,9 @@ async def stripe_payouts_webhook(request: Request):
     sig = request.headers.get("Stripe-Signature", "")
     try:
         event = deps.stripe_connect_provider.verify_webhook(payload, sig)
+    except RuntimeError as e:
+        # Provider not configured — distinguish from a bad signature
+        raise HTTPException(status_code=503, detail=str(e))
     except Exception as e:
         logger.warning(f"Stripe webhook signature failed: {e}")
         raise HTTPException(status_code=400, detail="Invalid signature")
