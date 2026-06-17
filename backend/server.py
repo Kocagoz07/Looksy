@@ -337,10 +337,8 @@ class PayPalPayoutRequest(BaseModel):
     amount_eur: float
     paypal_email: str
 
-# Helper function to convert USD to EUR
-def usd_to_eur(usd_amount: float) -> float:
-    rate = float(os.environ.get('USD_TO_EUR_RATE', '0.92'))
-    return round(usd_amount * rate, 2)
+# Helper function to convert USD to EUR (live rate, cached + auto-refreshed)
+from currency import usd_to_eur, get_converter  # noqa: E402
 
 # Helper function to calculate earnings from likes
 def calculate_earnings(likes_count: int) -> float:
@@ -2366,8 +2364,8 @@ async def setup_stripe_payout(request: Request, payout_req: StripePayoutRequest)
     tx_dict["created_at"] = tx_dict["created_at"].isoformat()
     await db.payment_transactions.insert_one(tx_dict)
     
-    # Deduct payout points
-    amount_usd = payout_req.amount_eur / float(os.environ.get('USD_TO_EUR_RATE', '0.92'))
+    # Deduct payout points (EUR → USD using live rate)
+    amount_usd = payout_req.amount_eur / get_converter().rate
     await db.users.update_one(
         {"user_id": user.user_id},
         {"$inc": {"payout_points": -amount_usd}}
@@ -2436,8 +2434,8 @@ async def setup_paypal_payout(request: Request, payout_req: PayPalPayoutRequest)
     tx_dict["created_at"] = tx_dict["created_at"].isoformat()
     await db.payment_transactions.insert_one(tx_dict)
     
-    # Deduct payout points
-    amount_usd = payout_req.amount_eur / float(os.environ.get('USD_TO_EUR_RATE', '0.92'))
+    # Deduct payout points (EUR → USD using live rate)
+    amount_usd = payout_req.amount_eur / get_converter().rate
     await db.users.update_one(
         {"user_id": user.user_id},
         {"$inc": {"payout_points": -amount_usd}}
@@ -2585,7 +2583,20 @@ async def startup_chat_and_location():
     await affiliate_engine.initialize()
     stripe_connect_provider = StripeConnectProvider(db)
     paypal_payouts_provider = PayPalPayoutsProvider(db)
-    logger.info("Chat, Location, Outfit, Affiliate, and Payout providers initialized")
+
+    # Publish singletons to the shared deps container for route modules
+    import deps as _deps
+    _deps.outfit_generator = outfit_generator
+    _deps.affiliate_engine = affiliate_engine
+    _deps.stripe_connect_provider = stripe_connect_provider
+    _deps.paypal_payouts_provider = paypal_payouts_provider
+
+    # Live currency conversion: fetch once + start hourly refresh
+    converter = get_converter()
+    await converter.refresh()
+    converter.start_background_refresh()
+
+    logger.info("Chat, Location, Outfit, Affiliate, Payout, and Currency services initialized")
 
 # WebSocket endpoint for real-time chat
 @app.websocket("/ws/chat")
@@ -3169,373 +3180,21 @@ async def get_user_risk_score_admin(user_id: str):
     """Admin: Get risk score for any user"""
     return await fraud_service.get_user_risk_score(user_id)
 
-# ================= AI OUTFIT GENERATOR & SMART AFFILIATE ENGINE =================
+# ================= MODULAR ROUTES =================
+# Populate shared deps container so route modules can access singletons
+import deps
+deps.db = db
+deps.fraud_service = fraud_service
+deps.get_current_user = get_current_user
 
-class OutfitGenerateRequest(BaseModel):
-    occasion: str = "everyday"
-    style: str = "casual"
-    season: str = "all-season"
-    budget: Optional[str] = None
-    color_preference: Optional[str] = None
-    additional_notes: Optional[str] = None
-    include_affiliate_links: bool = True
-
-
-class StyleProfileRequest(BaseModel):
-    favorite_styles: List[str] = []
-    favorite_colors: List[str] = []
-    body_type: Optional[str] = None
-    sizes: Dict[str, str] = {}
-    avoid: List[str] = []
-    budget_preference: Optional[str] = None
-
-
-class AffiliateSuggestRequest(BaseModel):
-    items: List[Dict]
-    budget: Optional[str] = None
-    outfit_id: Optional[str] = None
-    post_id: Optional[str] = None
-    persist: bool = True
-
-
-@api_router.post("/outfits/generate")
-async def generate_outfit(payload: OutfitGenerateRequest, request: Request):
-    user = await get_current_user(request)
-    if not user:
-        raise HTTPException(status_code=401, detail="Not authenticated")
-    if not outfit_generator:
-        raise HTTPException(status_code=503, detail="Outfit generator not ready")
-
-    try:
-        result = await outfit_generator.generate_outfit(
-            user_id=user.user_id,
-            occasion=payload.occasion,
-            style=payload.style,
-            season=payload.season,
-            budget=payload.budget,
-            color_preference=payload.color_preference,
-            additional_notes=payload.additional_notes,
-        )
-    except ValueError as ve:
-        raise HTTPException(status_code=400, detail=str(ve))
-
-    # Optionally generate affiliate links for the outfit items
-    if payload.include_affiliate_links and affiliate_engine:
-        items = result.get("outfit", {}).get("items", []) or []
-        try:
-            suggestions = await affiliate_engine.suggest_for_items(
-                items=items, user_id=user.user_id, budget=payload.budget
-            )
-            links = await affiliate_engine.create_links(
-                user_id=user.user_id,
-                suggestions=suggestions,
-                outfit_id=result["outfit_id"],
-            )
-            result["affiliate_links"] = links
-        except Exception as e:
-            logger.warning(f"Affiliate link generation failed: {e}")
-            result["affiliate_links"] = []
-
-    return result
-
-
-@api_router.get("/outfits/mine")
-async def my_outfits(request: Request, limit: int = 20):
-    user = await get_current_user(request)
-    if not user:
-        raise HTTPException(status_code=401, detail="Not authenticated")
-    outfits = await outfit_generator.get_user_outfits(user.user_id, limit)
-    return {"outfits": outfits, "count": len(outfits)}
-
-
-@api_router.post("/outfits/{outfit_id}/save")
-async def save_outfit(outfit_id: str, request: Request):
-    user = await get_current_user(request)
-    if not user:
-        raise HTTPException(status_code=401, detail="Not authenticated")
-    success = await outfit_generator.save_outfit(user.user_id, outfit_id)
-    if not success:
-        raise HTTPException(status_code=404, detail="Outfit not found")
-    return {"saved": True, "outfit_id": outfit_id}
-
-
-@api_router.get("/outfits/style-profile")
-async def get_style_profile(request: Request):
-    user = await get_current_user(request)
-    if not user:
-        raise HTTPException(status_code=401, detail="Not authenticated")
-    profile = await outfit_generator.get_user_style_profile(user.user_id)
-    return profile or {"user_id": user.user_id}
-
-
-@api_router.put("/outfits/style-profile")
-async def update_style_profile(payload: StyleProfileRequest, request: Request):
-    user = await get_current_user(request)
-    if not user:
-        raise HTTPException(status_code=401, detail="Not authenticated")
-    updated = await outfit_generator.update_user_style_profile(
-        user.user_id, payload.model_dump()
-    )
-    return updated
-
-
-@api_router.get("/outfits/trending")
-async def trending_styles(limit: int = 10):
-    return {"trending": await outfit_generator.get_trending_styles(limit)}
-
-
-@api_router.get("/outfits/options")
-async def outfit_options():
-    """Static options for the UI (style, occasion, season categories)."""
-    from outfit_generator import OutfitGenerator as OG
-    return {
-        "styles": OG.STYLE_CATEGORIES,
-        "occasions": OG.OCCASIONS,
-        "seasons": OG.SEASONS,
-    }
-
-
-@api_router.get("/outfits/{outfit_id}")
-async def get_outfit(outfit_id: str, request: Request):
-    """Return a previously-generated outfit + its persisted affiliate links."""
-    user = await get_current_user(request)
-    if not user:
-        raise HTTPException(status_code=401, detail="Not authenticated")
-    outfit_doc = await db.generated_outfits.find_one(
-        {"outfit_id": outfit_id, "user_id": user.user_id},
-        {"_id": 0},
-    )
-    if not outfit_doc:
-        raise HTTPException(status_code=404, detail="Outfit not found")
-    links = await affiliate_engine.get_links_for_outfit(outfit_id)
-    return {
-        "outfit_id": outfit_id,
-        "outfit": outfit_doc.get("generated_outfit", {}),
-        "request": outfit_doc.get("request", {}),
-        "created_at": outfit_doc.get("created_at"),
-        "saved": outfit_doc.get("saved", False),
-        "affiliate_links": [link for link in links if link.get("user_id") == user.user_id],
-    }
-
-
-# --------- Smart Affiliate Engine ---------
-
-@api_router.post("/affiliate/suggest")
-async def affiliate_suggest(payload: AffiliateSuggestRequest, request: Request):
-    user = await get_current_user(request)
-    if not user:
-        raise HTTPException(status_code=401, detail="Not authenticated")
-    if not affiliate_engine:
-        raise HTTPException(status_code=503, detail="Affiliate engine not ready")
-
-    suggestions = await affiliate_engine.suggest_for_items(
-        items=payload.items, user_id=user.user_id, budget=payload.budget
-    )
-    links: List[Dict] = []
-    if payload.persist:
-        links = await affiliate_engine.create_links(
-            user_id=user.user_id,
-            suggestions=suggestions,
-            outfit_id=payload.outfit_id,
-            post_id=payload.post_id,
-        )
-    return {"suggestions": suggestions, "links": links}
-
-
-@api_router.get("/affiliate/track/{link_id}")
-async def affiliate_track(link_id: str, request: Request):
-    """Track a click and redirect to the retailer. Public endpoint."""
-    user = await get_current_user(request)
-    ip = request.client.host if request.client else None
-    device = request.headers.get("X-Device-Fingerprint")
-    try:
-        result = await affiliate_engine.track_click(
-            link_id=link_id,
-            clicker_user_id=user.user_id if user else None,
-            ip_address=ip,
-            device_fingerprint=device,
-            fraud_service=fraud_service,
-        )
-    except ValueError as ve:
-        raise HTTPException(status_code=404, detail=str(ve))
-
-    from fastapi.responses import RedirectResponse
-    return RedirectResponse(url=result["target_url"], status_code=302)
-
-
-@api_router.get("/affiliate/my-links")
-async def my_affiliate_links(request: Request, limit: int = 50):
-    user = await get_current_user(request)
-    if not user:
-        raise HTTPException(status_code=401, detail="Not authenticated")
-    links = await affiliate_engine.get_links_for_user(user.user_id, limit)
-    return {"links": links, "count": len(links)}
-
-
-@api_router.get("/affiliate/my-stats")
-async def my_affiliate_stats(request: Request):
-    user = await get_current_user(request)
-    if not user:
-        raise HTTPException(status_code=401, detail="Not authenticated")
-    return await affiliate_engine.get_user_stats(user.user_id)
-
-
-@api_router.get("/affiliate/outfit/{outfit_id}")
-async def affiliate_for_outfit(outfit_id: str, request: Request):
-    user = await get_current_user(request)
-    if not user:
-        raise HTTPException(status_code=401, detail="Not authenticated")
-    links = await affiliate_engine.get_links_for_outfit(outfit_id)
-    # Only return links the requesting user owns
-    return {"links": [link for link in links if link.get("user_id") == user.user_id]}
-
-
-@api_router.get("/affiliate/post/{post_id}")
-async def affiliate_for_post(post_id: str, request: Request):
-    user = await get_current_user(request)
-    if not user:
-        raise HTTPException(status_code=401, detail="Not authenticated")
-    links = await affiliate_engine.get_links_for_post(post_id)
-    return {"links": [link for link in links if link.get("user_id") == user.user_id]}
-
-
-# ================= LIVE PAYOUTS: STRIPE CONNECT EXPRESS & PAYPAL =================
-
-@api_router.get("/payouts/providers/status")
-async def payouts_providers_status():
-    """Public: shows which payout providers are configured."""
-    return {
-        "stripe": {
-            "configured": bool(stripe_connect_provider and stripe_connect_provider.configured),
-            "webhook_secret_set": bool(
-                stripe_connect_provider and stripe_connect_provider.webhook_secret
-            ),
-        },
-        "paypal": {
-            "configured": bool(paypal_payouts_provider and paypal_payouts_provider.configured),
-            "mode": paypal_payouts_provider.mode if paypal_payouts_provider else None,
-            "webhook_id_set": bool(
-                paypal_payouts_provider and paypal_payouts_provider.webhook_id
-            ),
-        },
-    }
-
-
-@api_router.post("/payouts/stripe/connect")
-async def stripe_connect_create(request: Request):
-    """Create an Express connected account for the current user."""
-    user = await get_current_user(request)
-    if not user:
-        raise HTTPException(status_code=401, detail="Not authenticated")
-    try:
-        result = await stripe_connect_provider.create_express_account(
-            user_id=user.user_id, email=user.email
-        )
-        return result
-    except RuntimeError as e:
-        raise HTTPException(status_code=503, detail=str(e))
-    except Exception as e:
-        logger.error(f"Stripe account creation failed: {e}")
-        raise HTTPException(status_code=400, detail=str(e))
-
-
-@api_router.post("/payouts/stripe/onboarding-link")
-async def stripe_connect_onboarding_link(request: Request):
-    """Generate a Stripe-hosted onboarding URL for the current user."""
-    user = await get_current_user(request)
-    if not user:
-        raise HTTPException(status_code=401, detail="Not authenticated")
-    try:
-        url = await stripe_connect_provider.create_onboarding_link(user.user_id)
-        return {"url": url}
-    except RuntimeError as e:
-        raise HTTPException(status_code=503, detail=str(e))
-    except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
-
-
-@api_router.get("/payouts/stripe/status")
-async def stripe_connect_status(request: Request):
-    user = await get_current_user(request)
-    if not user:
-        raise HTTPException(status_code=401, detail="Not authenticated")
-    try:
-        return await stripe_connect_provider.get_account_status(user.user_id)
-    except RuntimeError as e:
-        raise HTTPException(status_code=503, detail=str(e))
-
-
-@api_router.post("/payouts/stripe/webhook")
-async def stripe_payouts_webhook(request: Request):
-    """Stripe webhook for account.updated, payout.paid, payout.failed, transfer.*"""
-    payload = await request.body()
-    sig = request.headers.get("Stripe-Signature", "")
-    try:
-        event = stripe_connect_provider.verify_webhook(payload, sig)
-    except Exception as e:
-        logger.warning(f"Stripe webhook signature failed: {e}")
-        raise HTTPException(status_code=400, detail="Invalid signature")
-
-    event_type = event.get("type", "")
-    data = event.get("data", {}).get("object", {})
-    logger.info(f"Stripe webhook: {event_type}")
-
-    if event_type == "account.updated":
-        await db.users.update_many(
-            {"stripe_account_id": data.get("id")},
-            {"$set": {
-                "stripe_charges_enabled": bool(data.get("charges_enabled")),
-                "stripe_payouts_enabled": bool(data.get("payouts_enabled")),
-                "stripe_details_submitted": bool(data.get("details_submitted")),
-            }},
-        )
-    elif event_type in ("transfer.created", "transfer.paid"):
-        await db.payouts.update_many(
-            {"stripe_transfer_id": data.get("id")},
-            {"$set": {"status": "succeeded" if event_type == "transfer.paid" else "processing"}},
-        )
-    elif event_type == "payout.failed":
-        await db.payouts.update_many(
-            {"stripe_transfer_id": data.get("id")},
-            {"$set": {
-                "status": "failed",
-                "failure_message": data.get("failure_message"),
-            }},
-        )
-
-    return {"received": True}
-
-
-# ---------- PayPal ----------
-
-@api_router.post("/payouts/paypal/webhook")
-async def paypal_payouts_webhook(request: Request):
-    body_bytes = await request.body()
-    body_str = body_bytes.decode("utf-8")
-    headers = {k.lower(): v for k, v in request.headers.items()}
-    try:
-        verified = await paypal_payouts_provider.verify_webhook(headers, body_str)
-    except RuntimeError as e:
-        raise HTTPException(status_code=503, detail=str(e))
-    if not verified:
-        raise HTTPException(status_code=400, detail="Invalid PayPal webhook signature")
-
-    event = json_module.loads(body_str)
-    event_type = event.get("event_type", "")
-    resource = event.get("resource", {})
-    logger.info(f"PayPal webhook: {event_type}")
-    if event_type == "PAYMENT.PAYOUTS-ITEM.SUCCEEDED":
-        await db.payouts.update_many(
-            {"paypal_batch_id": resource.get("payout_batch_id")},
-            {"$set": {"status": "succeeded"}},
-        )
-    elif event_type == "PAYMENT.PAYOUTS-ITEM.FAILED":
-        await db.payouts.update_many(
-            {"paypal_batch_id": resource.get("payout_batch_id")},
-            {"$set": {"status": "failed", "failure_message": resource.get("errors")}},
-        )
-    return {"received": True}
-
+from routes.outfits import router as outfits_router
+from routes.affiliate import router as affiliate_router
+from routes.payouts_live import router as payouts_live_router
+from routes.currency import router as currency_router
+api_router.include_router(outfits_router)
+api_router.include_router(affiliate_router)
+api_router.include_router(payouts_live_router)
+api_router.include_router(currency_router)
 
 # Include the router in the main app
 app.include_router(api_router)

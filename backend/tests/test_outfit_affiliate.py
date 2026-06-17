@@ -319,9 +319,9 @@ class TestAffiliate:
         )
         assert r.status_code == 404
 
-    def test_affiliate_for_outfit(self, anon_session, generated_outfit):
+    def test_affiliate_for_outfit(self, auth_session, generated_outfit):
         oid = generated_outfit["outfit_id"]
-        r = anon_session.get(f"{API}/affiliate/outfit/{oid}", timeout=15)
+        r = auth_session.get(f"{API}/affiliate/outfit/{oid}", timeout=15)
         assert r.status_code == 200, r.text
         data = r.json()
         _no_mongo_id(data)
@@ -330,9 +330,9 @@ class TestAffiliate:
         for link in data["links"]:
             assert link["outfit_id"] == oid
 
-    def test_affiliate_for_post_empty(self, anon_session):
+    def test_affiliate_for_post_empty(self, auth_session):
         # Unknown post id should still return an empty list (not 500)
-        r = anon_session.get(f"{API}/affiliate/post/post_nonexistent", timeout=15)
+        r = auth_session.get(f"{API}/affiliate/post/post_nonexistent", timeout=15)
         assert r.status_code == 200, r.text
         data = r.json()
         assert data == {"links": []}
