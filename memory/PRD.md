@@ -56,6 +56,17 @@ Build a fashion social media application named "Looksy" similar to Instagram wit
 
 ## What's Been Implemented
 
+### Session: Jun 17, 2026 — AI Outfit Studio UX fixes
+
+- **Recent generations are now clickable**: tapping reopens the outfit and restores Occasion/Style/Season/Budget/Colors/Notes form values so users can tweak & regenerate. Backend `GET /api/outfits/{outfit_id}` added (includes original `request` + `affiliate_links`, ownership-checked).
+- **Save button**: optimistic UI — toggles to **Saved** instantly with filled bookmark icon, disabled when already saved. Rolls back on failure.
+- **Trending pills**: hover state + toast confirmation when style is set; no longer feels inert.
+- **Auto-scroll**: after Generate or Reopen, the result card scrolls into view (mobile-friendly).
+- **Route ordering bugfix**: moved `GET /api/outfits/{outfit_id}` AFTER literal routes (`/style-profile`, `/trending`, `/options`) so they no longer get shadowed by the parameterized one.
+- **Chat list loading bug** (separate session fix): `ChatPage.js` was gating `fetchConversations` on a `user` prop that App never passed → list stuck on "Loading…". Switched to internal `currentUser` populated by `/api/auth/me`.
+
+## What's Been Implemented
+
 ### Session: May 22, 2026 (cont.)
 
 **Live Payouts Scaffolded (Stripe Connect Express + PayPal Payouts API):**

@@ -91,6 +91,11 @@ export default function OutfitGeneratorPage() {
       setResult(res.data);
       toast.success("Outfit generated!");
       loadHistory();
+      setTimeout(() => {
+        document
+          .querySelector('[data-testid="outfit-result"]')
+          ?.scrollIntoView({ behavior: "smooth", block: "start" });
+      }, 100);
     } catch (e) {
       console.error(e);
       const msg = e?.response?.data?.detail || "Failed to generate outfit";
@@ -101,6 +106,11 @@ export default function OutfitGeneratorPage() {
   };
 
   const handleSave = async (outfitId) => {
+    // optimistic: mark current result + history as saved immediately
+    setResult((prev) => (prev ? { ...prev, saved: true } : prev));
+    setHistory((prev) =>
+      prev.map((h) => (h.outfit_id === outfitId ? { ...h, saved: true } : h))
+    );
     try {
       await axios.post(
         `${BACKEND_URL}/api/outfits/${outfitId}/save`,
@@ -108,10 +118,48 @@ export default function OutfitGeneratorPage() {
         { withCredentials: true }
       );
       toast.success("Saved to your collection");
-      loadHistory();
     } catch (e) {
+      // rollback
+      setResult((prev) => (prev ? { ...prev, saved: false } : prev));
+      setHistory((prev) =>
+        prev.map((h) => (h.outfit_id === outfitId ? { ...h, saved: false } : h))
+      );
       toast.error("Failed to save outfit");
     }
+  };
+
+  const handleReopen = async (outfitId) => {
+    try {
+      const res = await axios.get(
+        `${BACKEND_URL}/api/outfits/${outfitId}`,
+        { withCredentials: true }
+      );
+      setResult(res.data);
+      // restore the form so the user can tweak and regenerate
+      if (res.data.request) {
+        setForm((prev) => ({
+          ...prev,
+          occasion: res.data.request.occasion || prev.occasion,
+          style: res.data.request.style || prev.style,
+          season: res.data.request.season || prev.season,
+          budget: res.data.request.budget || "",
+          color_preference: res.data.request.color_preference || "",
+          additional_notes: res.data.request.additional_notes || "",
+        }));
+      }
+      setTimeout(() => {
+        document
+          .querySelector('[data-testid="outfit-result"]')
+          ?.scrollIntoView({ behavior: "smooth", block: "start" });
+      }, 100);
+    } catch (e) {
+      toast.error("Couldn't reopen this outfit");
+    }
+  };
+
+  const handleTrendingClick = (style) => {
+    setForm((prev) => ({ ...prev, style }));
+    toast.message(`Style set to ${style} — tap Generate to refresh`);
   };
 
   const trackClick = (linkId) => {
@@ -266,8 +314,8 @@ export default function OutfitGeneratorPage() {
                   <Badge
                     key={t.style}
                     variant="outline"
-                    className="cursor-pointer"
-                    onClick={() => setForm({ ...form, style: t.style })}
+                    className="cursor-pointer hover:bg-rose-50"
+                    onClick={() => handleTrendingClick(t.style)}
                     data-testid={`trending-${t.style}`}
                   >
                     {t.style} · {t.popularity}
@@ -297,9 +345,11 @@ export default function OutfitGeneratorPage() {
               </h3>
               <div className="space-y-2">
                 {history.map((h) => (
-                  <div
+                  <button
                     key={h.outfit_id}
-                    className="p-3 bg-white border border-gray-200 rounded-xl flex items-center justify-between"
+                    type="button"
+                    onClick={() => handleReopen(h.outfit_id)}
+                    className="w-full p-3 bg-white border border-gray-200 rounded-xl flex items-center justify-between text-left hover:border-rose-300 hover:shadow-sm transition"
                     data-testid={`history-${h.outfit_id}`}
                   >
                     <div>
@@ -315,7 +365,7 @@ export default function OutfitGeneratorPage() {
                         <Bookmark className="w-3 h-3 mr-1" /> Saved
                       </Badge>
                     )}
-                  </div>
+                  </button>
                 ))}
               </div>
             </div>
@@ -342,6 +392,7 @@ function OutfitResultCard({ data, onSave, onTrack }) {
   const outfit = data.outfit || {};
   const items = outfit.items || [];
   const links = data.affiliate_links || [];
+  const isSaved = !!data.saved;
 
   // group links by item name
   const linksByItem = links.reduce((acc, l) => {
@@ -362,11 +413,13 @@ function OutfitResultCard({ data, onSave, onTrack }) {
         </div>
         <Button
           size="sm"
-          variant="outline"
+          variant={isSaved ? "secondary" : "outline"}
           onClick={onSave}
+          disabled={isSaved}
           data-testid="save-outfit-btn"
         >
-          <Bookmark className="w-4 h-4 mr-1" /> Save
+          <Bookmark className={`w-4 h-4 mr-1 ${isSaved ? "fill-current" : ""}`} />
+          {isSaved ? "Saved" : "Save"}
         </Button>
       </div>
 

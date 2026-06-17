@@ -3295,6 +3295,29 @@ async def outfit_options():
     }
 
 
+@api_router.get("/outfits/{outfit_id}")
+async def get_outfit(outfit_id: str, request: Request):
+    """Return a previously-generated outfit + its persisted affiliate links."""
+    user = await get_current_user(request)
+    if not user:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    outfit_doc = await db.generated_outfits.find_one(
+        {"outfit_id": outfit_id, "user_id": user.user_id},
+        {"_id": 0},
+    )
+    if not outfit_doc:
+        raise HTTPException(status_code=404, detail="Outfit not found")
+    links = await affiliate_engine.get_links_for_outfit(outfit_id)
+    return {
+        "outfit_id": outfit_id,
+        "outfit": outfit_doc.get("generated_outfit", {}),
+        "request": outfit_doc.get("request", {}),
+        "created_at": outfit_doc.get("created_at"),
+        "saved": outfit_doc.get("saved", False),
+        "affiliate_links": [link for link in links if link.get("user_id") == user.user_id],
+    }
+
+
 # --------- Smart Affiliate Engine ---------
 
 @api_router.post("/affiliate/suggest")
