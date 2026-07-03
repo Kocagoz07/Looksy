@@ -296,9 +296,17 @@ class TestPayoutsLiveRouter:
             assert k in data["stripe"]
         for k in ("configured", "mode", "webhook_id_set"):
             assert k in data["paypal"]
-        # Per brief, both placeholders -> configured False
-        assert data["stripe"]["configured"] is False
-        assert data["paypal"]["configured"] is False
+        # Configured flags must be bool (state-agnostic — depends on .env)
+        assert isinstance(data["stripe"]["configured"], bool)
+        assert isinstance(data["paypal"]["configured"], bool)
+
+    def _stripe_configured(self, anon_session) -> bool:
+        r = anon_session.get(f"{API}/payouts/providers/status", timeout=15)
+        return r.json().get("stripe", {}).get("configured", False)
+
+    def _paypal_configured(self, anon_session) -> bool:
+        r = anon_session.get(f"{API}/payouts/providers/status", timeout=15)
+        return r.json().get("paypal", {}).get("configured", False)
 
     def test_stripe_connect_requires_auth(self):
         r = _fresh().post(f"{API}/payouts/stripe/connect", timeout=15)
@@ -312,38 +320,47 @@ class TestPayoutsLiveRouter:
         r = _fresh().get(f"{API}/payouts/stripe/status", timeout=15)
         assert r.status_code in (401, 403)
 
-    def test_stripe_connect_returns_503_when_unconfigured(self, auth_session):
+    def test_stripe_connect_when_unconfigured(self, auth_session, anon_session):
+        if self._stripe_configured(anon_session):
+            pytest.skip("Stripe is configured in this env — 503 branch not reachable")
         r = auth_session.post(f"{API}/payouts/stripe/connect", timeout=15)
         assert r.status_code == 503, r.text
 
-    def test_stripe_onboarding_link_returns_503_when_unconfigured(self, auth_session):
+    def test_stripe_onboarding_link_when_unconfigured(self, auth_session, anon_session):
+        if self._stripe_configured(anon_session):
+            pytest.skip("Stripe is configured in this env")
         r = auth_session.post(f"{API}/payouts/stripe/onboarding-link", timeout=15)
         assert r.status_code == 503, r.text
 
-    def test_stripe_status_returns_503_when_unconfigured(self, auth_session):
+    def test_stripe_status_when_unconfigured(self, auth_session, anon_session):
+        if self._stripe_configured(anon_session):
+            pytest.skip("Stripe is configured in this env")
         r = auth_session.get(f"{API}/payouts/stripe/status", timeout=15)
         assert r.status_code == 503, r.text
 
-    def test_stripe_webhook_bad_signature_returns_400(self, anon_session):
+    def test_stripe_webhook_bad_signature(self, anon_session):
+        """Unconfigured → 503; configured but bad sig → 400."""
         r = anon_session.post(
             f"{API}/payouts/stripe/webhook",
             data=b"{}",
             headers={"Stripe-Signature": "bad-sig", "Content-Type": "application/json"},
             timeout=15,
         )
-        assert r.status_code == 400, r.text
+        expected = 503 if not self._stripe_configured(anon_session) else 400
+        assert r.status_code == expected, r.text
 
-    def test_paypal_webhook_returns_503_when_unconfigured(self, anon_session):
-        # Paypal webhook calls verify_webhook which may return False or raise RuntimeError
+    def test_paypal_webhook_signature_check(self, anon_session):
+        """Unconfigured → 503; configured but bad sig → 400."""
         r = anon_session.post(
             f"{API}/payouts/paypal/webhook",
-            data=b"{}",
+            data=b'{"event_type":"PAYMENT.PAYOUTS-ITEM.SUCCEEDED"}',
             headers={"Content-Type": "application/json"},
             timeout=15,
         )
-        # Per iteration 8 minor bug, currently returns 400 (verify_webhook returns False
-        # before configured check). Accept both 400 and 503.
-        assert r.status_code in (400, 503), r.text
+        if self._paypal_configured(anon_session):
+            assert r.status_code == 400, r.text
+        else:
+            assert r.status_code == 503, r.text
 
 
 # ---------------- REGRESSION: request-payout uses live rate ----------------
@@ -381,20 +398,22 @@ class TestRequestPayoutUsesLiveRate:
             assert remaining < 50.0, f"payout_points not deducted: {remaining}"
             assert remaining == pytest.approx(50.0 - amount_eur, abs=0.5)
 
-            # A new pending payout exists
+            # A new payout exists (pending when provider unconfigured, processing when live path was hit)
             payout = db.payouts.find_one(
-                {"user_id": TEST_USER_ID, "status": "pending"},
+                {"user_id": TEST_USER_ID, "status": {"$in": ["pending", "processing"]}},
                 sort=[("created_at", -1)],
             )
             assert payout is not None
             assert float(payout.get("amount_eur", 0)) == pytest.approx(amount_eur, abs=0.01)
         finally:
-            # Cleanup: reset payout_points and delete test pending payouts
+            # Cleanup: reset payout_points and delete test payouts
             db.users.update_one(
                 {"user_id": TEST_USER_ID},
                 {"$set": {"payout_points": 0.0}},
             )
-            db.payouts.delete_many({"user_id": TEST_USER_ID, "status": "pending"})
+            db.payouts.delete_many(
+                {"user_id": TEST_USER_ID, "status": {"$in": ["pending", "processing"]}}
+            )
 
 
 # ---------------- Smoke: posts + rewards still work ----------------

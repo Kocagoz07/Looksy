@@ -55,43 +55,11 @@ const getWebGLFingerprint = async () => {
   }
 };
 
-// Get audio fingerprint
-const getAudioFingerprint = async () => {
-  try {
-    const AudioContext = window.AudioContext || window.webkitAudioContext;
-    if (!AudioContext) return 'no_audio';
-    
-    const context = new AudioContext();
-    const oscillator = context.createOscillator();
-    const analyser = context.createAnalyser();
-    const gain = context.createGain();
-    const processor = context.createScriptProcessor(4096, 1, 1);
-    
-    gain.gain.value = 0;
-    oscillator.type = 'triangle';
-    oscillator.connect(analyser);
-    analyser.connect(processor);
-    processor.connect(gain);
-    gain.connect(context.destination);
-    
-    oscillator.start(0);
-    
-    const fingerprint = await new Promise((resolve) => {
-      processor.onaudioprocess = (e) => {
-        const buffer = e.inputBuffer.getChannelData(0);
-        const sum = buffer.reduce((a, b) => a + Math.abs(b), 0);
-        oscillator.disconnect();
-        processor.disconnect();
-        context.close();
-        resolve(sum.toString(16).substring(0, 16));
-      };
-    });
-    
-    return fingerprint;
-  } catch (e) {
-    return 'audio_error';
-  }
-};
+// Audio fingerprinting removed: creating an AudioContext without a user
+// gesture is blocked by modern browsers, and ScriptProcessorNode is
+// deprecated. Canvas + WebGL + hardware + screen + timezone still provide
+// strong uniqueness for fraud detection.
+const getAudioFingerprint = async () => 'audio_disabled';
 
 // Get installed fonts (limited)
 const getInstalledFonts = () => {

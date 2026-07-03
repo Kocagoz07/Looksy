@@ -156,7 +156,7 @@ Always respond in valid JSON format with this structure:
         """Build the AI prompt for outfit generation"""
         
         prompt_parts = [
-            f"Create a complete outfit for the following requirements:",
+            "Create a complete outfit for the following requirements:",
             f"- Occasion: {occasion}",
             f"- Style: {style}",
             f"- Season: {season}"
@@ -172,7 +172,7 @@ Always respond in valid JSON format with this structure:
             prompt_parts.append(f"- Additional notes: {additional_notes}")
         
         if style_profile:
-            prompt_parts.append(f"\nUser's style preferences:")
+            prompt_parts.append("\nUser's style preferences:")
             if style_profile.get("favorite_styles"):
                 prompt_parts.append(f"- Favorite styles: {', '.join(style_profile['favorite_styles'])}")
             if style_profile.get("favorite_colors"):

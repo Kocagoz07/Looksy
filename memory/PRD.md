@@ -56,6 +56,16 @@ Build a fashion social media application named "Looksy" similar to Instagram wit
 
 ## What's Been Implemented
 
+### Session: Jul 3, 2026 — Error sweep + PayPal live in sandbox
+
+- **PayPal Payouts wired up in sandbox** end-to-end. Real OAuth token flow works, first sandbox payout produced batch `XY6JK5EHQ75U2` (20 EUR, PROCESSING). `PAYPAL_CLIENT_ID`, `PAYPAL_CLIENT_SECRET`, `PAYPAL_MODE=sandbox`, `PAYPAL_WEBHOOK_ID=WDXYJTUMR9LWQ` set in `/app/backend/.env`. Webhook endpoint pre-flighted (reachable, signature-verified via PayPal's verify-webhook-signature API). Stripe Connect still awaiting `sk_test_...` / `sk_live_...`.
+- **bcrypt log-noise fix**: passlib was crashing on `bcrypt.__about__` (removed in bcrypt 4.1). Pinned `bcrypt==4.0.1` — login logs are now warning-free. `requirements.txt` frozen.
+- **Frontend audio-fingerprint fix**: removed the AudioContext-based fingerprint (blocked by browsers without user gesture + `ScriptProcessorNode` deprecated). Canvas + WebGL + hardware + screen dimensions still provide fraud-detection uniqueness. Frontend console is now clean.
+- **Test state-agnosticism**: 5 stale assertions in `test_live_payouts.py` + `test_currency_refactor.py` hard-coded "both providers unconfigured". Refactored to auto-skip / branch on `/api/payouts/providers/status` output so the suite stays green regardless of which providers are configured.
+- **Broad endpoint sweep**: 18/18 core endpoints return non-5xx (auth, posts, celebrity, payouts, favorites, outfits, affiliate, currency, chat, locations, users search).
+- **Code quality**: fixed 2 F541 f-string-without-placeholder issues in `outfit_generator.py`; removed unused `seeded` var.
+- **All 113 backend tests pass**.
+
 ### Session: Jun 17, 2026 — Live currency rate + modular routes
 
 - **Live USD→EUR rate** via `open.er-api.com` (free, no API key). New `/app/backend/currency.py` with in-memory 1-hour TTL cache and a background refresh loop. The sync `usd_to_eur()` helper used by post pricing, earnings, and payout endpoints reads the cached value (no behavioural change for callers). At session time the live rate was **0.8613** (vs the old hardcoded 0.92).
