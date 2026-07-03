@@ -186,8 +186,14 @@ export default function PostDetail() {
                       <p className="font-manrope font-semibold text-base">{user.name}</p>
                       {user.brand_verified && <BrandVerifiedBadge size="sm" />}
                     </div>
+                    {post.location && (
+                      <div className="flex items-center gap-1 text-gray-600 mt-0.5" data-testid="post-location-mobile">
+                        <MapPin className="w-3.5 h-3.5" />
+                        <span className="font-manrope text-sm">{post.location}{post.venue && ` • ${post.venue}`}</span>
+                      </div>
+                    )}
                     {user.category && (
-                      <p className="font-manrope text-sm text-gray-500 capitalize">{user.category}</p>
+                      <p className="font-manrope text-xs text-gray-500 capitalize mt-0.5">{user.category}</p>
                     )}
                   </div>
                 </div>
@@ -220,8 +226,14 @@ export default function PostDetail() {
                       <p className="font-manrope font-semibold text-base">{user.name}</p>
                       {user.brand_verified && <BrandVerifiedBadge size="sm" />}
                     </div>
+                    {post.location && (
+                      <div className="flex items-center gap-1 text-gray-600 mt-0.5" data-testid="post-location-desktop">
+                        <MapPin className="w-3.5 h-3.5" />
+                        <span className="font-manrope text-sm">{post.location}{post.venue && ` • ${post.venue}`}</span>
+                      </div>
+                    )}
                     {user.category && (
-                      <p className="font-manrope text-sm text-gray-500 capitalize">{user.category}</p>
+                      <p className="font-manrope text-xs text-gray-500 capitalize mt-0.5">{user.category}</p>
                     )}
                   </div>
                 </div>
@@ -271,12 +283,6 @@ export default function PostDetail() {
                   <span className="font-manrope text-sm">Music Link</span>
                   <ExternalLink className="w-3 h-3" />
                 </a>
-              )}
-              {post.location && (
-                <div className="flex items-center gap-2 text-gray-700">
-                  <MapPin className="w-4 h-4" />
-                  <span className="font-manrope text-sm">{post.location}{post.venue && ` • ${post.venue}`}</span>
-                </div>
               )}
             </div>
 
