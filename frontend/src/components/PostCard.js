@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Heart, MessageCircle, Star, Trash2, Bookmark } from "lucide-react";
+import { Heart, MessageCircle, Star, Trash2, Bookmark, MapPin } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import DeleteConfirmDialog from "@/components/DeleteConfirmDialog";
 import axios from "axios";
@@ -113,6 +113,16 @@ export default function PostCard({ post, currentUserId, onDelete }) {
             <div className="star-badge" data-testid="star-badge">
               <Star className="w-4 h-4 fill-current" />
               <span>10K+</span>
+            </div>
+          )}
+
+          {post.location && (
+            <div
+              className="absolute top-2 left-2 flex items-center gap-1 px-2 py-1 rounded-full bg-black/55 backdrop-blur-sm text-white text-xs font-manrope shadow-sm"
+              data-testid={`post-location-${post.post_id}`}
+            >
+              <MapPin className="w-3 h-3" />
+              <span className="max-w-[9rem] truncate">{post.location}</span>
             </div>
           )}
           
