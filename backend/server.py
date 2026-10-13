@@ -2606,6 +2606,7 @@ async def startup_chat_and_location():
     global stripe_connect_provider, paypal_payouts_provider, notification_service
     chat_manager = ChatManager(db)
     await chat_manager.initialize()
+    deps.chat_manager = chat_manager
     location_service = LocationService(db)
     await location_service.initialize()
 
@@ -3232,6 +3233,7 @@ from routes.currency import router as currency_router
 from routes.notifications import router as notifications_router
 from routes.auth_extras import router as auth_extras_router
 from routes.captions import router as captions_router
+from routes.share import router as share_router
 api_router.include_router(outfits_router)
 api_router.include_router(affiliate_router)
 api_router.include_router(payouts_live_router)
@@ -3239,6 +3241,7 @@ api_router.include_router(currency_router)
 api_router.include_router(notifications_router)
 api_router.include_router(auth_extras_router)
 api_router.include_router(captions_router)
+api_router.include_router(share_router)
 
 # Include the router in the main app
 app.include_router(api_router)

@@ -223,7 +223,8 @@ class ChatManager:
         conversation_id: str,
         sender_id: str,
         content: str,
-        message_type: str = "text"
+        message_type: str = "text",
+        extra: Optional[dict] = None
     ) -> dict:
         """Send a message to a conversation"""
         
@@ -258,6 +259,8 @@ class ChatManager:
             "is_deleted": False,
             "read_by": [sender_id]
         }
+        if extra:
+            message.update(extra)
         
         await self.db.chat_messages.insert_one(message)
         
@@ -279,13 +282,18 @@ class ChatManager:
         )
         
         if deps.notification_service:
-            preview = content if message_type == "text" else f"sent a {message_type}"
+            if message_type == "post_share":
+                preview = "shared a post with you"
+            elif message_type == "text":
+                preview = f"sent you a message: {content[:60]}"
+            else:
+                preview = f"sent you a {message_type}"
             for p in conversation.get("participants", []):
                 if p.get("user_id") != sender_id:
                     try:
                         await deps.notification_service.emit(
                             p["user_id"], sender_id, "message",
-                            f"sent you a message: {preview[:60]}", conversation_id=conversation_id,
+                            preview, conversation_id=conversation_id,
                         )
                     except Exception as e:
                         logger.warning(f"Message notification failed: {e}")

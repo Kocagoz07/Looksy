@@ -9,6 +9,7 @@ import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
 import { Avatar, AvatarFallback, AvatarImage } from '../components/ui/avatar';
 import { ScrollArea } from '../components/ui/scroll-area';
+import { MessageContent } from '../components/SharedPostMessage';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -535,7 +536,7 @@ const ChatPage = ({ user }) => {
                               : 'bg-gray-100 text-gray-900 rounded-bl-md'
                           } ${message.failed ? 'opacity-60' : ''}`}
                         >
-                          <p className="text-sm whitespace-pre-wrap break-words">{message.content}</p>
+                          <MessageContent message={message} />
                         </div>
                         
                         <div className={`flex items-center gap-1 mt-1 text-xs text-gray-400 ${isOwn ? 'justify-end' : ''}`}>

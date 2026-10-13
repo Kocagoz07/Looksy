@@ -1,9 +1,10 @@
 import { useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { ArrowLeft, Heart, Music, MapPin, Star, ExternalLink, MessageCircle, Trash2 } from "lucide-react";
+import { ArrowLeft, Heart, Music, MapPin, Star, ExternalLink, MessageCircle, Trash2, Send } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import BrandVerifiedBadge from "@/components/BrandVerifiedBadge";
+import { SharePostDialog } from "@/components/SharePostDialog";
 import axios from "axios";
 import { toast } from "sonner";
 
@@ -13,6 +14,7 @@ export default function PostDetail() {
   const { postId } = useParams();
   const navigate = useNavigate();
   const [post, setPost] = useState(null);
+  const [shareOpen, setShareOpen] = useState(false);
   const [user, setUser] = useState(null);
   const [currentUser, setCurrentUser] = useState(null);
   const [comments, setComments] = useState([]);
@@ -261,6 +263,17 @@ export default function PostDetail() {
               >
                 <Star className={`w-6 h-6 ${isStarred ? 'fill-current text-yellow-500' : ''}`} />
               </Button>
+
+              <Button
+                data-testid="share-btn"
+                onClick={() => setShareOpen(true)}
+                variant="ghost"
+                className="flex items-center gap-2"
+                title="Share"
+              >
+                <Send className="w-6 h-6" />
+              </Button>
+              <SharePostDialog open={shareOpen} onOpenChange={setShareOpen} postId={post.post_id} />
             </div>
 
             {/* Caption */}
