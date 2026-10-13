@@ -37,8 +37,8 @@ export const SharePostDialog = ({ open, onOpenChange, postId }) => {
   const [sending, setSending] = useState(false);
 
   useEffect(() => {
-    if (!open) return;
     const q = query.trim();
+    if (!open || q.length === 1) return;
     const t = setTimeout(() => {
       axios.get(`${BACKEND_URL}/api/share/recipients`, { params: q.length >= 2 ? { q } : {}, withCredentials: true })
         .then(({ data }) => setUsers(data.users))

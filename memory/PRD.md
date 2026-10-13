@@ -56,6 +56,12 @@ Build a fashion social media application named "Looksy" similar to Instagram wit
 
 ## What's Been Implemented
 
+### Session: Oct 13, 2026 (cont.) — Share post via DM
+- Share (paper-plane) button on feed PostCard and PostDetail opens `SharePostDialog`: followers/following list + name search, multi-select (max 10), optional note, sends post into each recipient's direct chat.
+- Backend `routes/share.py`: `GET /api/share/recipients`, `POST /api/posts/{post_id}/share`; messages type `post_share` with `shared_post` payload; real-time WS broadcast + recipient notification "shared a post with you".
+- Chat (ChatPage + MessageDialog) renders shared posts as tappable preview cards → /post/{id}.
+- No share counter (per user choice). Pruned leftover TEST_* posts. Testing: iteration_11 — 15/15 backend + all UI flows passed.
+
 ### Session: Oct 13, 2026 — Auth hardening, Claude caption writer, Notifications
 - **Auth hardening** (`routes/auth_extras.py`): Forgot password → reset link (1h, single-use, SHA-256 hashed tokens, TTL index, 60s cooldown, invalidates all sessions on reset). Email verification on sign-up (`email_verified=false` on register, `/verify-email` page, resend with cooldown, dashboard banner). Password min 8 chars, unique `users.email` index, 422 error formatting on frontend. Emails are **MOCKED** (logged as `[MOCK EMAIL]`; links returned when `AUTH_DEV_MODE=true`).
 - **AI Caption Writer (Claude Sonnet 4.5)** (`routes/captions.py`, `AICaptionWriter.js`): on /upload, 5 tones, optional photo vision, streams via SSE, returns 3 captions + toggleable hashtags, saved to `caption_generations`. Upgraded emergentintegrations to 0.2.2 (streaming).
@@ -314,6 +320,7 @@ Build a fashion social media application named "Looksy" similar to Instagram wit
 - [x] Forgot/Reset password + email verification
 - [x] AI Caption + Hashtag Writer (Claude Sonnet 4.5)
 - [x] Notifications (bell + feed)
+- [x] Share post via DM
 - [x] Live currency rate + PayPal Payouts (sandbox)
 
 ### P0 - Next
