@@ -19,6 +19,13 @@ These credentials are used by the testing agent and for E2E validation.
 | Category | women |
 | User ID | user_2e79eca385b6 |
 
+## Auth notes
+- Passwords must be >= 8 chars for new registrations / resets.
+- Both seeded users have no `email_verified` field (legacy = treated as verified, no banner). New registrations start with email_verified=false.
+- Emails are MOCKED: reset/verify links are logged in backend.err.log ("[MOCK EMAIL]") and returned in API responses because AUTH_DEV_MODE=true.
+- Do NOT reset the passwords of the two seeded users above; register fresh qa_*@looksy.com users for reset-flow tests.
+- See /app/auth_testing.md for all auth endpoints.
+
 ## Login Endpoint
 
 ```bash

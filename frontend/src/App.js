@@ -13,6 +13,8 @@ import CelebrityPage from "@/pages/CelebrityPage";
 import RewardsPage from "@/pages/RewardsPage";
 import ChatPage from "@/pages/ChatPage";
 import OutfitGeneratorPage from "@/pages/OutfitGeneratorPage";
+import ResetPasswordPage from "@/pages/ResetPasswordPage";
+import VerifyEmailPage from "@/pages/VerifyEmailPage";
 import ProtectedRoute from "@/components/ProtectedRoute";
 import { Toaster } from "@/components/ui/sonner";
 
@@ -23,6 +25,8 @@ function AppContent() {
     <Routes>
       <Route path="/" element={<LandingPage />} />
       <Route path="/auth/verify" element={<AuthCallback />} />
+      <Route path="/reset-password" element={<ResetPasswordPage />} />
+      <Route path="/verify-email" element={<VerifyEmailPage />} />
       <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
       <Route path="/men" element={<ProtectedRoute><Dashboard category="men" /></ProtectedRoute>} />
       <Route path="/women" element={<ProtectedRoute><Dashboard category="women" /></ProtectedRoute>} />

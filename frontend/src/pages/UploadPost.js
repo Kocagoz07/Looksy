@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import LocationPicker from "@/components/LocationPicker";
+import { AICaptionWriter } from "@/components/AICaptionWriter";
 import axios from "axios";
 import { toast } from "sonner";
 
@@ -258,6 +259,18 @@ export default function UploadPost() {
               placeholder="Write a caption for your post..."
               className="font-manrope"
               rows={3}
+            />
+            <AICaptionWriter
+              imageFile={imageFile}
+              onApply={setCaption}
+              context={{
+                draft: caption || null,
+                location: selectedLocation?.name || location || null,
+                venue: venue || null,
+                music: music || null,
+                products: products.map((p) => p.name).filter(Boolean),
+                total_price: totalPrice ? parseFloat(totalPrice) : null,
+              }}
             />
           </div>
 

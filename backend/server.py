@@ -21,6 +21,9 @@ from passlib.context import CryptContext
 from emergentintegrations.llm.chat import LlmChat, UserMessage
 from emergentintegrations.payments.stripe.checkout import StripeCheckout, CheckoutSessionResponse, CheckoutStatusResponse, CheckoutSessionRequest
 
+import deps
+from routes.auth_extras import ensure_auth_indexes, issue_email_verification
+
 # Import security module
 from security import (
     SecurityManager, SECURITY_HEADERS, get_client_ip,
@@ -134,6 +137,8 @@ async def startup_event():
     global security_manager
     security_manager = SecurityManager(db)
     await security_manager.initialize()
+    deps.security_manager = security_manager
+    await ensure_auth_indexes(db)
     logging.info("Security manager initialized")
 
 # Models
@@ -161,6 +166,7 @@ class User(BaseModel):
     following: List[str] = []  # List of user_ids
     brand_verified: bool = False  # Brand partnership verified badge
     brand_verified_at: Optional[datetime] = None  # When brand verification was granted
+    email_verified: Optional[bool] = None
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
 class ProductLink(BaseModel):
@@ -222,7 +228,7 @@ class EmailPasswordLogin(BaseModel):
 
 class EmailPasswordRegister(BaseModel):
     email: EmailStr
-    password: str
+    password: str = Field(min_length=8, max_length=128)
     name: str
     category: str
 
@@ -301,8 +307,8 @@ class VerifyOTPRequest(BaseModel):
     otp_code: str
 
 class RegisterWithPhoneRequest(BaseModel):
-    email: str
-    password: str
+    email: EmailStr
+    password: str = Field(min_length=8, max_length=128)
     name: str
     category: str
     phone_number: str
@@ -376,6 +382,14 @@ def calculate_payout_points(stars_to_convert: int, total_stars: int = None) -> f
         rate = 0.25  # Tier 3: €0.25 per star
     
     return round(stars_to_convert * rate, 2)
+
+async def notify(user_id: str, actor_id: str, n_type: str, preview: str, **kwargs):
+    if not notification_service:
+        return
+    try:
+        await notification_service.emit(user_id, actor_id, n_type, preview, **kwargs)
+    except Exception as e:
+        logger.warning(f"Notification emit failed ({n_type}): {e}")
 
 # Auth helper
 async def get_current_user(request: Request) -> Optional[User]:
@@ -573,7 +587,9 @@ async def register_with_phone(request: RegisterWithPhoneRequest, response: Respo
     user_dict["phone_number"] = phone
     user_dict["phone_verified"] = True
     user_dict["phone_verified_at"] = otp_record["verified_at"]
+    user_dict["email_verified"] = False
     await db.users.insert_one(user_dict)
+    await issue_email_verification(user_id, email)
     
     # Clean up OTP record
     await db.otp_verifications.delete_many({"phone_number": phone})
@@ -633,7 +649,9 @@ async def register_with_password(request: EmailPasswordRegister, response: Respo
     
     user_dict = new_user.model_dump()
     user_dict["created_at"] = user_dict["created_at"].isoformat()
+    user_dict["email_verified"] = False
     await db.users.insert_one(user_dict)
+    await issue_email_verification(user_id, email)
     
     # Create session
     session_token = f"session_{secrets.token_urlsafe(32)}"
@@ -851,11 +869,10 @@ async def verify_magic_link(token: str, response: Response):
     if user_doc:
         user_id = user_doc["user_id"]
         # Update category if changed
-        if user_doc.get("category") != category:
-            await db.users.update_one(
-                {"user_id": user_id},
-                {"$set": {"category": category}}
-            )
+        await db.users.update_one(
+            {"user_id": user_id},
+            {"$set": {"category": category, "email_verified": True}}
+        )
     else:
         # Create new user
         user_id = f"user_{uuid.uuid4().hex[:12]}"
@@ -864,7 +881,8 @@ async def verify_magic_link(token: str, response: Response):
             user_id=user_id,
             email=email,
             name=name,
-            category=category
+            category=category,
+            email_verified=True
         )
         user_dict = new_user.model_dump()
         user_dict["created_at"] = user_dict["created_at"].isoformat()
@@ -1163,6 +1181,7 @@ async def toggle_star(request: Request, post_id: str):
             {"user_id": user.user_id},
             {"$addToSet": {"starred_posts": post_id}}
         )
+        await notify(post["user_id"], user.user_id, "star", "starred your post", post_id=post_id)
         return {"starred": True}
 
 @api_router.post("/posts/{post_id}/like")
@@ -1212,6 +1231,7 @@ async def toggle_like(request: Request, post_id: str):
             }
         )
         new_likes = post["likes_count"] + 1
+        await notify(post["user_id"], user.user_id, "like", "liked your post", post_id=post_id)
     
     # Update post owner's earnings
     earnings_usd = calculate_earnings(new_likes)
@@ -1245,6 +1265,10 @@ async def create_comment(request: Request, post_id: str, comment_data: CommentCr
     if not user:
         raise HTTPException(status_code=401, detail="Not authenticated")
     
+    post = await db.posts.find_one({"post_id": post_id}, {"_id": 0, "user_id": 1})
+    if not post:
+        raise HTTPException(status_code=404, detail="Post not found")
+
     comment_id = f"comment_{uuid.uuid4().hex[:12]}"
     comment = Comment(
         comment_id=comment_id,
@@ -1258,6 +1282,9 @@ async def create_comment(request: Request, post_id: str, comment_data: CommentCr
     comment_dict = comment.model_dump()
     comment_dict["created_at"] = comment_dict["created_at"].isoformat()
     await db.comments.insert_one(comment_dict)
+    text = comment_data.text.strip()
+    await notify(post["user_id"], user.user_id, "comment",
+                 f"commented: {text[:80]}{'…' if len(text) > 80 else ''}", post_id=post_id)
     
     return comment
 
@@ -1356,6 +1383,7 @@ async def toggle_follow(request: Request, user_id: str):
             {"user_id": user_id},
             {"$addToSet": {"followers": user.user_id}}
         )
+        await notify(user_id, user.user_id, "follow", "started following you", target_user_id=user.user_id)
         return {"following": True}
 
 @api_router.post("/users/me/payout-method")
@@ -2564,11 +2592,12 @@ outfit_generator = None
 affiliate_engine = None
 stripe_connect_provider = None
 paypal_payouts_provider = None
+notification_service = None
 
 @app.on_event("startup")
 async def startup_chat_and_location():
     global chat_manager, location_service, outfit_generator, affiliate_engine
-    global stripe_connect_provider, paypal_payouts_provider
+    global stripe_connect_provider, paypal_payouts_provider, notification_service
     chat_manager = ChatManager(db)
     await chat_manager.initialize()
     location_service = LocationService(db)
@@ -2577,12 +2606,15 @@ async def startup_chat_and_location():
     from outfit_generator import OutfitGenerator
     from affiliate_engine import AffiliateEngine
     from payouts_providers import StripeConnectProvider, PayPalPayoutsProvider
+    from notifications import NotificationService
     outfit_generator = OutfitGenerator(db)
     await outfit_generator.initialize()
     affiliate_engine = AffiliateEngine(db)
     await affiliate_engine.initialize()
     stripe_connect_provider = StripeConnectProvider(db)
     paypal_payouts_provider = PayPalPayoutsProvider(db)
+    notification_service = NotificationService(db)
+    await notification_service.initialize()
 
     # Publish singletons to the shared deps container for route modules
     import deps as _deps
@@ -2590,6 +2622,7 @@ async def startup_chat_and_location():
     _deps.affiliate_engine = affiliate_engine
     _deps.stripe_connect_provider = stripe_connect_provider
     _deps.paypal_payouts_provider = paypal_payouts_provider
+    _deps.notification_service = notification_service
 
     # Live currency conversion: fetch once + start hourly refresh
     converter = get_converter()
@@ -3191,10 +3224,16 @@ from routes.outfits import router as outfits_router
 from routes.affiliate import router as affiliate_router
 from routes.payouts_live import router as payouts_live_router
 from routes.currency import router as currency_router
+from routes.notifications import router as notifications_router
+from routes.auth_extras import router as auth_extras_router
+from routes.captions import router as captions_router
 api_router.include_router(outfits_router)
 api_router.include_router(affiliate_router)
 api_router.include_router(payouts_live_router)
 api_router.include_router(currency_router)
+api_router.include_router(notifications_router)
+api_router.include_router(auth_extras_router)
+api_router.include_router(captions_router)
 
 # Include the router in the main app
 app.include_router(api_router)

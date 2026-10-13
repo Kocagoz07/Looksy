@@ -10,6 +10,8 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { EmailVerifyBanner } from "@/components/EmailVerifyBanner";
+import { NotificationBell } from "@/components/NotificationBell";
 import PostCard from "@/components/PostCard";
 import BrandVerifiedBadge from "@/components/BrandVerifiedBadge";
 import { toast } from "sonner";
@@ -120,11 +122,11 @@ export default function Dashboard({ category = null }) {
       {/* Header */}
       <header className="border-b border-opacity-20 backdrop-blur-sm sticky top-0 z-50" style={{ borderColor: 'currentColor' }}>
         <div className="max-w-7xl mx-auto px-4 py-4 flex items-center justify-between">
-          <h1 className="font-italiana text-3xl sm:text-4xl" data-testid="looksy-logo">
+          <h1 className="font-italiana text-2xl sm:text-4xl" data-testid="looksy-logo">
             Looksy
           </h1>
           
-          <div className="flex items-center gap-2 sm:gap-3">
+          <div className="flex items-center gap-0 sm:gap-3">
             {/* Search Users */}
             <Button
               data-testid="search-users-btn"
@@ -137,6 +139,8 @@ export default function Dashboard({ category = null }) {
               <Search className="w-4 h-4" />
             </Button>
             
+            <NotificationBell />
+
             {/* Celebrity Posts */}
             <Button
               data-testid="celebrity-link"
@@ -307,6 +311,7 @@ export default function Dashboard({ category = null }) {
 
       {/* Content */}
       <main className="max-w-7xl mx-auto px-4 py-8">
+        <EmailVerifyBanner user={currentUser} />
         {loading ? (
           <div className="flex items-center justify-center py-20">
             <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-current"></div>

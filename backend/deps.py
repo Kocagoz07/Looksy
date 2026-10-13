@@ -17,6 +17,8 @@ affiliate_engine = None  # type: ignore
 stripe_connect_provider = None  # type: ignore
 paypal_payouts_provider = None  # type: ignore
 fraud_service = None  # type: ignore
+notification_service = None  # type: ignore
+security_manager = None  # type: ignore
 
 # Auth helper (assigned in server.py once defined)
 get_current_user: Optional[Callable] = None
