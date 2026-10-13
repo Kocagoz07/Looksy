@@ -15,6 +15,7 @@ logger = logging.getLogger(__name__)
 
 
 VALID_TYPES = {"like", "comment", "follow", "star", "message", "collab", "outfit"}
+DEDUPE_TYPES = {"like", "star", "follow"}
 
 
 class NotificationService:
@@ -46,6 +47,12 @@ class NotificationService:
             return None
         if actor_user_id and actor_user_id == user_id:
             # Never notify a user about their own action
+            return None
+
+        if n_type in DEDUPE_TYPES and await self.db.notifications.find_one({
+            "user_id": user_id, "actor_user_id": actor_user_id, "type": n_type,
+            "post_id": post_id, "read": False,
+        }):
             return None
 
         # Enrich preview with actor name if possible

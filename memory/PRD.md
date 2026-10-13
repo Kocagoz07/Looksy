@@ -56,6 +56,12 @@ Build a fashion social media application named "Looksy" similar to Instagram wit
 
 ## What's Been Implemented
 
+### Session: Oct 13, 2026 — Auth hardening, Claude caption writer, Notifications
+- **Auth hardening** (`routes/auth_extras.py`): Forgot password → reset link (1h, single-use, SHA-256 hashed tokens, TTL index, 60s cooldown, invalidates all sessions on reset). Email verification on sign-up (`email_verified=false` on register, `/verify-email` page, resend with cooldown, dashboard banner). Password min 8 chars, unique `users.email` index, 422 error formatting on frontend. Emails are **MOCKED** (logged as `[MOCK EMAIL]`; links returned when `AUTH_DEV_MODE=true`).
+- **AI Caption Writer (Claude Sonnet 4.5)** (`routes/captions.py`, `AICaptionWriter.js`): on /upload, 5 tones, optional photo vision, streams via SSE, returns 3 captions + toggleable hashtags, saved to `caption_generations`. Upgraded emergentintegrations to 0.2.2 (streaming).
+- **Notifications**: emitted for like, star, comment, follow, chat message (dedupe for unread like/star/follow, no self-notify). `NotificationBell` in Dashboard header (30s polling badge, popover feed, mark-all-read on open, click-through navigation).
+- Testing: iteration_10 — 21/21 backend + 12/12 UI flows passed.
+
 ### Session: Jul 3, 2026 — Error sweep + PayPal live in sandbox
 
 - **PayPal Payouts wired up in sandbox** end-to-end. Real OAuth token flow works, first sandbox payout produced batch `XY6JK5EHQ75U2` (20 EUR, PROCESSING). `PAYPAL_CLIENT_ID`, `PAYPAL_CLIENT_SECRET`, `PAYPAL_MODE=sandbox`, `PAYPAL_WEBHOOK_ID=WDXYJTUMR9LWQ` set in `/app/backend/.env`. Webhook endpoint pre-flighted (reachable, signature-verified via PayPal's verify-webhook-signature API). Stripe Connect still awaiting `sk_test_...` / `sk_live_...`.
@@ -305,16 +311,22 @@ Build a fashion social media application named "Looksy" similar to Instagram wit
 - [x] In-Profile Message Dialog
 - [x] AI Outfit Generator (gpt-4o-mini)
 - [x] Smart Affiliate Engine (AI retailer matching + click tracking)
+- [x] Forgot/Reset password + email verification
+- [x] AI Caption + Hashtag Writer (Claude Sonnet 4.5)
+- [x] Notifications (bell + feed)
+- [x] Live currency rate + PayPal Payouts (sandbox)
+
+### P0 - Next
+- [ ] Discover feed fallback (trending/global posts for new users with empty follow-graph)
 
 ### P1 - Medium Priority
-- [ ] Real Stripe/PayPal integration (currently mocked)
-- [ ] Real currency conversion API (currently hardcoded)
-- [ ] Email sending for magic links (currently dev mode)
+- [ ] Stripe Connect payouts (awaiting live keys)
+- [ ] Real email delivery (magic links, password reset, verification) — set AUTH_DEV_MODE=false once wired
 - [ ] Verify star calculation logic
 - [ ] Photo+Music to Video Feature (design doc ready: `/app/docs/PHOTO_MUSIC_VIDEO_DESIGN.md`)
 
 ### P2 - Lower Priority
-- [ ] Real-time notifications via WebSockets
+- [ ] Push notifications over WebSockets (currently 30s polling)
 - [ ] Post scheduling
 - [ ] Analytics dashboard
 
@@ -346,7 +358,7 @@ Build a fashion social media application named "Looksy" similar to Instagram wit
 - `/app/frontend/src/components/MessageDialog.js` - In-profile messaging
 
 ### Third-Party Integrations
-- **Emergent LLM Key:** Universal key for GPT-4o-mini AI features
+- **Emergent LLM Key:** GPT-4o-mini (collab/outfits) + Claude Sonnet 4.5 (captions)
 - **Google Fonts:** Italiana font family
 - **bcrypt:** Password hashing
 
@@ -359,6 +371,5 @@ Build a fashion social media application named "Looksy" similar to Instagram wit
 ## Mocked/Placeholder Features
 - **Stripe/PayPal payouts:** Deducts points but no real transfer
 - **KYC verification:** Auto-approves without real identity check
-- **Currency conversion:** Uses hardcoded rate (0.92)
-- **Email sending:** Magic links returned in response (dev mode)
+- **Email sending:** MOCKED — magic links, reset & verification links logged / returned in response (AUTH_DEV_MODE=true)
 - **Twilio SMS:** In test mode (returns OTP in response)

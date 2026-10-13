@@ -1,0 +1,65 @@
+{
+  "summary": "Full backend + frontend testing of (1) email/password auth hardening (register validation, email verification, forgot/reset, resend cooldown), (2) Claude Sonnet 4.5 SSE caption generation, and (3) Notifications (like/star/comment/follow + no-self + unread badge/panel). 21/21 backend pytest cases pass. All targeted UI flows pass end-to-end on desktop + mobile (390px).",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "POST /api/upload-image", "issue": "Response key is 'file_id' but /api/posts expects query param 'image_id' — inconsistent naming (not a bug, but confusing for API consumers; previous testing iterations also noted this)."}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_auth_claude_notifs.py",
+    "/app/test_reports/pytest/iter10_results.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "routes/auth_extras.py reset_password: deletes ALL user_sessions globally for the user — this is intended but note the current-session cookie on the browser that just reset will also be invalidated. UX-wise the ResetPasswordPage redirects to '/' with a toast; make sure LandingPage doesn't try to auto-restore the dead cookie (currently fine because / unauthed shows gender picker).",
+    "routes/auth_extras.py forgot_password: the 60s _recently_issued cooldown is tied to the token record's created_at, which also auto-expires via TTL in 1h. If a user requests a reset, then uses it successfully (used=True), a 2nd request within 60s is still silently throttled (returns generic message, no new link). That's probably desired, but add a comment — it caused a brief 'why isn't the link in response' confusion while writing tests.",
+    "server.py register_with_password awaits issue_email_verification BEFORE creating the session. If the mock email helper fails (e.g., Mongo index not yet created), the user row is already inserted but the request fails and the client has no session. Wrap verification-link issuance in try/except and log, don't block registration.",
+    "routes/captions.py: parse_output silently returns captions=[] / hashtags=[] when Claude breaks format. Streaming endpoint will then yield type:'done' with empty arrays and the frontend AICaptionWriter will show empty results. Consider yielding type:'error' when captions list is empty.",
+    "notifications.py.emit: no cap on actor-user_id spamming — a user who repeatedly likes/unlikes/likes creates N notifications. Toggle_like/star correctly only emits on 'like' side, so this is covered, but still worth dedup logic for the same (actor,post,type) within e.g. 24h.",
+    "server.py is still 3251 lines — carry-over refactor comment from iter9; auth_extras + captions + notifications are the only new extractions in this iter."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_auth_claude_notifs.py (new — 21 tests covering register/verify/forgot/reset/resend/captions-SSE/notifications)",
+    "/app/test_reports/pytest/iter10_results.xml (new)"
+  ],
+  "success_rate": {"backend": "100% (21/21)", "frontend": "100% (12/12 UI assertions pass)"},
+  "test_credentials": "testuser@looksy.com / test1234 / men (seeded, used for notification target + AI caption session) and newuser456@looksy.com / test1234 / women (used as actor for like/star/comment/follow). qa_*@looksy.com users registered dynamically for reset/verify tests then cleaned up.",
+  "seed_data_creation": "During test run: created ~5 ephemeral qa_*@looksy.com users (deleted at end), 1 TEST_NOTIF_POST per test class with 1x1 jpeg in GridFS (deleted at end), test notifications/comments produced by notification tests (cleaned up). Final cleanup: 3 posts, 3 comments, 19 qa users, 10 notifications deleted via direct Mongo query. Legacy 'TEST_CHAT_LOC_' post with red placeholder image is leftover from iter8 and not owned by this run.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Full regression: `pytest /app/backend/tests/test_auth_claude_notifs.py` (~18s, 21 tests). Fixtures `seed_session` and `seed2_session` are SESSION-scoped — critical because the brute-force limiter kicks in at 5 logins/15min. If re-adding function-scoped login fixtures, expect 429s. The caption streaming test takes 5-15s. AUTH_DEV_MODE=true in backend/.env returns reset_link + verification_link in dev — if that flips to false the ForgotReset/VerifyEmail tests must parse backend.err.log instead (TestVerifyEmail already does this). Emergent LLM key is live — captions call anthropic/claude-sonnet-4-5-20250929.",
+  "verified_endpoints": {
+    "auth_hardening": [
+      "POST /api/auth/register (422 on <8 pw, 200 with email_verified=false)",
+      "POST /api/auth/verify-email (200 valid, 400 invalid)",
+      "POST /api/auth/forgot-password (generic 200 unknown, reset_link in dev; 60s cooldown)",
+      "POST /api/auth/reset-password (200 success, 422 short, 400 token reused, invalidates old sessions)",
+      "POST /api/auth/resend-verification (401 unauth, 429 cooldown, already_verified for seeded)",
+      "GET /api/auth/me (401 after reset, 200 after login with new pw)"
+    ],
+    "claude_captions": [
+      "POST /api/ai/captions/generate (401 unauth, 422 bad tone, 200 SSE with delta+done events, 3 captions + hashtags, persisted to caption_generations)"
+    ],
+    "notifications": [
+      "GET /api/notifications (401 unauth, 200 with items)",
+      "GET /api/notifications/unread-count",
+      "POST /api/notifications/mark-read ({} marks all)",
+      "like/star/comment/follow all emit notifications; unlike/unstar don't; no-self-notification; comment on missing post -> 404"
+    ]
+  },
+  "ui_flows_verified": [
+    "LandingPage -> gender -> Email&Password tab -> forgot-password-link -> dialog -> submit -> sent + dev link",
+    "/reset-password?token=... -> short/mismatch errors -> successful reset -> redirect to /",
+    "/verify-email?token=invalid -> status shows invalid/expired message",
+    "Seeded user login -> dashboard -> no email-verify-banner -> notification-bell -> panel opens with items",
+    "/upload -> AICaptionWriter: tone-chic -> generate -> live stream -> results with 3 options + 16 hashtags -> apply fills caption-input",
+    "Mobile 390px dashboard: no horizontal overflow (scrollW==clientW==390), logout-btn visible"
+  ],
+  "rca of the issue": "n/a — no production bugs. Initial test file had two self-inflicted issues: (1) used response['image_id'] but backend returns 'file_id' (fixed) and (2) function-scoped login fixtures tripped the brute-force 5-attempts-in-15min lockout mid-run (fixed by making login fixtures session-scoped)."
+}

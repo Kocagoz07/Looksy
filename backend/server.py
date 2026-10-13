@@ -589,7 +589,10 @@ async def register_with_phone(request: RegisterWithPhoneRequest, response: Respo
     user_dict["phone_verified_at"] = otp_record["verified_at"]
     user_dict["email_verified"] = False
     await db.users.insert_one(user_dict)
-    await issue_email_verification(user_id, email)
+    try:
+        await issue_email_verification(user_id, email)
+    except Exception as e:
+        logger.error(f"Email verification issuance failed for {email}: {e}")
     
     # Clean up OTP record
     await db.otp_verifications.delete_many({"phone_number": phone})
@@ -651,7 +654,10 @@ async def register_with_password(request: EmailPasswordRegister, response: Respo
     user_dict["created_at"] = user_dict["created_at"].isoformat()
     user_dict["email_verified"] = False
     await db.users.insert_one(user_dict)
-    await issue_email_verification(user_id, email)
+    try:
+        await issue_email_verification(user_id, email)
+    except Exception as e:
+        logger.error(f"Email verification issuance failed for {email}: {e}")
     
     # Create session
     session_token = f"session_{secrets.token_urlsafe(32)}"
@@ -3215,7 +3221,6 @@ async def get_user_risk_score_admin(user_id: str):
 
 # ================= MODULAR ROUTES =================
 # Populate shared deps container so route modules can access singletons
-import deps
 deps.db = db
 deps.fraud_service = fraud_service
 deps.get_current_user = get_current_user

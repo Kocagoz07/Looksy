@@ -113,6 +113,9 @@ async def generate_captions(payload: CaptionRequest, request: Request):
             return
 
         result = parse_output("".join(full))
+        if not result["captions"]:
+            yield _sse({"type": "error", "detail": "The caption writer returned an unexpected format. Please try again."})
+            return
         await deps.db.caption_generations.insert_one({
             "generation_id": generation_id,
             "user_id": user.user_id,
