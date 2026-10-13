@@ -12,6 +12,8 @@ import {
 } from "@/components/ui/dialog";
 import { EmailVerifyBanner } from "@/components/EmailVerifyBanner";
 import { NotificationBell } from "@/components/NotificationBell";
+import { StoriesBar } from "@/components/stories/StoriesBar";
+import { HomeFeed } from "@/components/HomeFeed";
 import PostCard from "@/components/PostCard";
 import BrandVerifiedBadge from "@/components/BrandVerifiedBadge";
 import { toast } from "sonner";
@@ -53,6 +55,7 @@ export default function Dashboard({ category = null }) {
   };
 
   const fetchPosts = async () => {
+    if (activeTab === "all") return;
     setLoading(true);
     try {
       let url = `${BACKEND_URL}/api/posts`;
@@ -312,7 +315,12 @@ export default function Dashboard({ category = null }) {
       {/* Content */}
       <main className="max-w-7xl mx-auto px-4 py-8">
         <EmailVerifyBanner user={currentUser} />
-        {loading ? (
+        {activeTab === "all" ? (
+          <>
+            <StoriesBar currentUser={currentUser} />
+            <HomeFeed currentUser={currentUser} />
+          </>
+        ) : loading ? (
           <div className="flex items-center justify-center py-20">
             <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-current"></div>
           </div>

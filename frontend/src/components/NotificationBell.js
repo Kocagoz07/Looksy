@@ -1,23 +1,17 @@
 import { useCallback, useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Bell, Heart, MessageCircle, UserPlus, Star, Send, Handshake, Wand2 } from "lucide-react";
+import { Bell, Heart, MessageCircle, UserPlus, Star, Send, Handshake, Wand2, SmilePlus } from "lucide-react";
+import { timeAgo } from "@/utils/media";
 import axios from "axios";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Button } from "@/components/ui/button";
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 const POLL_MS = 30000;
-const ICONS = { like: Heart, comment: MessageCircle, follow: UserPlus, star: Star, message: Send, collab: Handshake, outfit: Wand2 };
-
-const timeAgo = (iso) => {
-  const s = Math.max(1, Math.floor((Date.now() - new Date(iso).getTime()) / 1000));
-  const units = [[86400 * 7, "w"], [86400, "d"], [3600, "h"], [60, "m"]];
-  for (const [sec, label] of units) if (s >= sec) return `${Math.floor(s / sec)}${label}`;
-  return `${s}s`;
-};
+const ICONS = { like: Heart, comment: MessageCircle, follow: UserPlus, star: Star, message: Send, collab: Handshake, outfit: Wand2, reaction: SmilePlus };
 
 const linkFor = (n) => {
-  if (n.type === "message" && n.conversation_id) return `/chat/${n.conversation_id}`;
+  if ((n.type === "message" || n.type === "reaction") && n.conversation_id) return `/chat/${n.conversation_id}`;
   if (n.post_id) return `/post/${n.post_id}`;
   if (n.actor_user_id) return `/profile/${n.actor_user_id}`;
   return null;

@@ -66,6 +66,8 @@ const MessageDialog = ({ isOpen, onClose, targetUser, currentUser }) => {
       const data = JSON.parse(event.data);
       if (data.type === 'message:new' && conversation?.conversation_id === data.message.conversation_id) {
         setMessages(prev => [...prev, data.message]);
+      } else if (data.type === 'message:reaction') {
+        setMessages(prev => prev.map(m => m.message_id === data.message_id ? { ...m, reactions: data.reactions } : m));
       } else if (data.type === 'message:sent') {
         setMessages(prev => prev.map(m => 
           m.temp_id ? { ...data.message, temp_id: undefined } : m
@@ -226,7 +228,7 @@ const MessageDialog = ({ isOpen, onClose, targetUser, currentUser }) => {
                             : 'bg-gray-100 text-gray-900 rounded-bl-sm'
                         } ${message.failed ? 'opacity-60' : ''}`}
                       >
-                        <MessageContent message={message} />
+                        <MessageContent message={message} currentUserId={currentUser?.user_id} />
                       </div>
                       
                       <div className={`flex items-center gap-1 mt-0.5 text-[10px] text-gray-400 ${isOwn ? 'justify-end' : ''}`}>

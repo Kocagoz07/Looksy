@@ -14,7 +14,7 @@ from motor.motor_asyncio import AsyncIOMotorDatabase
 logger = logging.getLogger(__name__)
 
 
-VALID_TYPES = {"like", "comment", "follow", "star", "message", "collab", "outfit"}
+VALID_TYPES = {"like", "comment", "follow", "star", "message", "collab", "outfit", "reaction"}
 DEDUPE_TYPES = {"like", "star", "follow"}
 
 

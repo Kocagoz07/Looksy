@@ -83,3 +83,46 @@ async def share_post(post_id: str, payload: SharePostRequest, request: Request):
         sent.append({"recipient_id": r["user_id"], "conversation_id": conversation["conversation_id"]})
 
     return {"shared": len(sent), "results": sent}
+
+
+REACTION_EMOJIS = {"❤️", "😍", "🔥", "😂", "😮", "👏"}
+
+
+class ReactionRequest(BaseModel):
+    emoji: str = Field(max_length=8)
+
+
+@router.post("/chat/messages/{message_id}/react")
+async def react_to_message(message_id: str, payload: ReactionRequest, request: Request):
+    user = await _require_user(request)
+    if payload.emoji not in REACTION_EMOJIS:
+        raise HTTPException(status_code=400, detail="Unsupported reaction")
+    message = await deps.db.chat_messages.find_one({"message_id": message_id, "is_deleted": {"$ne": True}}, {"_id": 0})
+    if not message:
+        raise HTTPException(status_code=404, detail="Message not found")
+    if message.get("type") != "post_share":
+        raise HTTPException(status_code=400, detail="Reactions are only available on shared posts")
+    conversation = await deps.db.conversations.find_one(
+        {"conversation_id": message["conversation_id"], "participants.user_id": user.user_id}, {"_id": 1}
+    )
+    if not conversation:
+        raise HTTPException(status_code=403, detail="Not a participant of this conversation")
+
+    reactions = [r for r in message.get("reactions", []) if r["user_id"] != user.user_id]
+    previous = next((r for r in message.get("reactions", []) if r["user_id"] == user.user_id), None)
+    added = not previous or previous["emoji"] != payload.emoji
+    if added:
+        reactions.append({"user_id": user.user_id, "emoji": payload.emoji})
+    await deps.db.chat_messages.update_one({"message_id": message_id}, {"$set": {"reactions": reactions}})
+
+    event = {"type": "message:reaction", "message_id": message_id,
+             "conversation_id": message["conversation_id"], "reactions": reactions}
+    await deps.chat_manager.broadcast_to_conversation(message["conversation_id"], event, exclude_user=user.user_id)
+    if added and deps.notification_service:
+        await deps.notification_service.emit(
+            message["sender_id"], user.user_id, "reaction",
+            f"reacted {payload.emoji} to the post you shared",
+            post_id=(message.get("shared_post") or {}).get("post_id"),
+            conversation_id=message["conversation_id"],
+        )
+    return {"message_id": message_id, "reactions": reactions}

@@ -124,6 +124,12 @@ const ChatPage = ({ user }) => {
         ));
         break;
       
+      case 'message:reaction':
+        setMessages(prev => prev.map(m =>
+          m.message_id === data.message_id ? { ...m, reactions: data.reactions } : m
+        ));
+        break;
+
       case 'typing:update':
         setTypingUsers(prev => ({
           ...prev,
@@ -536,7 +542,7 @@ const ChatPage = ({ user }) => {
                               : 'bg-gray-100 text-gray-900 rounded-bl-md'
                           } ${message.failed ? 'opacity-60' : ''}`}
                         >
-                          <MessageContent message={message} />
+                          <MessageContent message={message} currentUserId={effectiveUser?.user_id} />
                         </div>
                         
                         <div className={`flex items-center gap-1 mt-1 text-xs text-gray-400 ${isOwn ? 'justify-end' : ''}`}>
