@@ -56,6 +56,12 @@ Build a fashion social media application named "Looksy" similar to Instagram wit
 
 ## What's Been Implemented
 
+### Session: Oct 13, 2026 (cont. 2) — Stories, chat reactions, Discover feed
+- **Stories** (`routes/stories.py`, `components/stories/*`): 24h TTL stories (gallery upload with caption, or "Add to your story" from Share dialog). Story rings above the home feed (own + followed, gradient = unseen, grey = seen), fullscreen viewer (5s auto-advance, tap left/right, hold to pause, Esc), owner "Seen by N" viewer list + delete.
+- **Chat quick reactions** on shared-post cards: double tap = ❤️ (burst animation), long press = 6-emoji picker; one reaction per user (toggle/replace), real-time WS `message:reaction`, notification type `reaction` to sender.
+- **Home feed** (`routes/feed.py`, `HomeFeed.js`): Following / Discover tabs; Following = followed + own posts, with "Popular for you" section when < 6 posts; Discover = popular (likes + 2×stars, last 14 days, user's category first, then filled from all-time/other categories). Men/Women/Stars tabs unchanged.
+- Testing: iteration_12 — backend 28/28, frontend 10/10 flows passed.
+
 ### Session: Oct 13, 2026 (cont.) — Share post via DM
 - Share (paper-plane) button on feed PostCard and PostDetail opens `SharePostDialog`: followers/following list + name search, multi-select (max 10), optional note, sends post into each recipient's direct chat.
 - Backend `routes/share.py`: `GET /api/share/recipients`, `POST /api/posts/{post_id}/share`; messages type `post_share` with `shared_post` payload; real-time WS broadcast + recipient notification "shared a post with you".
@@ -321,10 +327,12 @@ Build a fashion social media application named "Looksy" similar to Instagram wit
 - [x] AI Caption + Hashtag Writer (Claude Sonnet 4.5)
 - [x] Notifications (bell + feed)
 - [x] Share post via DM
+- [x] Stories (24h) + viewer list
+- [x] Chat quick reactions on shared posts
+- [x] Following / Discover feed + Popular for you
 - [x] Live currency rate + PayPal Payouts (sandbox)
 
 ### P0 - Next
-- [ ] Discover feed fallback (trending/global posts for new users with empty follow-graph)
 
 ### P1 - Medium Priority
 - [ ] Stripe Connect payouts (awaiting live keys)

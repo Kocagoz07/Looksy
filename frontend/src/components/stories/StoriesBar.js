@@ -11,7 +11,7 @@ const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 const MAX_FILE_MB = 10;
 
 const StoryRing = ({ name, picture, unseen, onClick, testId, badge }) => (
-  <button type="button" data-testid={testId} onClick={onClick}
+  <button type="button" data-testid={testId} data-seen={!unseen} onClick={onClick}
     className="flex flex-col items-center gap-1.5 w-[72px] shrink-0 group">
     <span className={`relative p-[2.5px] rounded-full transition-transform duration-200 group-hover:scale-105 ${
       unseen ? "bg-gradient-to-tr from-[#800020] via-[#C2185B] to-[#D4AF37]" : "bg-gray-300"}`}>
