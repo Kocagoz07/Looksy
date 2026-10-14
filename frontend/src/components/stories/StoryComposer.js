@@ -5,7 +5,7 @@ import { toast } from "sonner";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { ProductTagsEditor, MAX_STORY_PRODUCTS } from "@/components/stories/ProductTagsEditor";
+import { ProductTagsEditor, MAX_STORY_PRODUCTS, newProduct } from "@/components/stories/ProductTagsEditor";
 import { apiErrorMessage } from "@/utils/apiError";
 import { imageUrl } from "@/utils/media";
 
@@ -36,7 +36,7 @@ export const StoryComposer = ({ source, onClose, onPosted }) => {
     }
     axios.get(`${BACKEND_URL}/api/posts/${source.postId}`, opts).then(({ data }) => {
       setPreview(imageUrl(data.image_id));
-      setProducts((data.products || []).slice(0, MAX_STORY_PRODUCTS).map((p) => ({ name: p.name || "", url: p.url || "", price: "" })));
+      setProducts((data.products || []).slice(0, MAX_STORY_PRODUCTS).map((p) => newProduct(p.name || "", p.url || "")));
     }).catch(() => toast.error("Could not load post"));
   }, [source]);
 

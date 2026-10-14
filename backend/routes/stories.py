@@ -61,7 +61,7 @@ async def _create_product_links(user_id: str, story_id: str, products: List[Stor
             "search_query": p.name, "target_url": p.url, "commission_rate": 0.0,
             "clicks": 0, "conversions": 0, "estimated_earnings_eur": 0.0, "created_at": now,
         })
-        out.append({"link_id": link_id, "name": p.name, "price": p.price, "retailer": retailer})
+        out.append({"link_id": link_id, "name": p.name, "price": p.price})
     return out
 
 
@@ -116,7 +116,7 @@ def _public(story: dict, viewer_id: str) -> dict:
         "image_id": story["image_id"],
         "caption": story.get("caption"),
         "shared_post": story.get("shared_post"),
-        "products": story.get("products", []),
+        "products": [{k: v for k, v in p.items() if k != "retailer"} for p in story.get("products", [])],
         "created_at": _iso(story["created_at"]),
         "expires_at": _iso(story["expires_at"]),
         "seen": is_owner or any(v["user_id"] == viewer_id for v in story.get("viewers", [])),

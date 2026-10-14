@@ -73,10 +73,10 @@ class TestStoryProductsCreate:
         p0, p1 = d["products"]
         assert p0["name"] == "Linen Blazer"
         assert p0["price"] == 89.9
-        assert p0["retailer"] == "zara.com"
+        assert "retailer" not in p0
         assert p0["link_id"].startswith("aff_")
         assert p1["price"] is None
-        assert p1["retailer"] == "zara.com"
+        assert "retailer" not in p1
         TestStoryProductsCreate.created.append((d["story_id"], p0["link_id"]))
 
     def test_02_reject_invalid_url(self, test_sess):
@@ -144,7 +144,7 @@ class TestStoryFromPost:
         assert d["caption"] == "TEST_ov"
         assert len(d["products"]) == 1
         assert d["products"][0]["name"] == "Custom Tee"
-        assert d["products"][0]["retailer"] == "example.com"
+        assert "retailer" not in d["products"][0]
         TestStoryFromPost.created.append(d["story_id"])
 
 
@@ -204,7 +204,7 @@ class TestFeedProducts:
         has_products = [s for s in tu["stories"] if s.get("products")]
         assert has_products, "Expected at least one testuser story with products in feed"
         p = has_products[0]["products"][0]
-        for k in ("link_id", "name", "retailer"):
+        for k in ("link_id", "name"):
             assert k in p
 
 

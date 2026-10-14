@@ -28,7 +28,7 @@ export const ProductCardSheet = ({ product, onClose }) => {
           <span className="w-12 h-12 shrink-0 rounded-2xl bg-black text-white flex items-center justify-center"><ShoppingBag className="w-5 h-5" /></span>
           <div className="min-w-0">
             <p data-testid="story-product-card-name" className="font-manrope font-semibold text-base break-words">{product.name}</p>
-            <p data-testid="story-product-card-store" className="font-manrope text-xs text-gray-500 uppercase tracking-widest mt-1">{product.retailer}</p>
+            <p data-testid="story-product-card-store" className="font-manrope text-xs text-gray-500 uppercase tracking-widest mt-1">Product Link</p>
           </div>
         </div>
         {product.price != null && (
