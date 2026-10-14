@@ -339,7 +339,7 @@ export default function UploadPost() {
                   <div key={index} className="flex items-center gap-2 p-3 bg-gray-50 rounded-lg">
                     <div className="flex-1">
                       <p className="font-manrope text-sm font-semibold">{product.name}</p>
-                      <p className="font-manrope text-xs text-gray-500 truncate">{product.url}</p>
+                      <p className="font-manrope text-[10px] uppercase tracking-widest text-gray-500">Product Link</p>
                     </div>
                     <Button
                       type="button"

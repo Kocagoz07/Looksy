@@ -61,6 +61,7 @@ Build a fashion social media application named "Looksy" similar to Instagram wit
 - **DM inbox**: header Messages button with unread badge → /chat. After sharing a post via DM the user is taken to that conversation (or /chat for multiple recipients).
 - Testing: iteration_13 — backend 12/12, frontend 6/6 phases passed.
 - Brand hidden on story links: product card shows "Product Link" instead of store/domain; composer shows filled links as a "Product Link" pill (Change to edit). API no longer returns `retailer` for story products (kept internally in affiliate_links).
+- Same on posts: PostDetail product rows show name + "PRODUCT LINK"; links go through `GET /api/posts/{post_id}/products/{index}/go` (302, http/https only, store URL never shown on hover). Non-owner clicks are logged in `post_product_clicks`; the owner sees "N clicks" per product (`GET /api/posts/{post_id}/product-clicks`, owner-only). Upload screen product list shows "Product Link" instead of the URL.
 
 ### Session: Oct 13, 2026 (cont. 2) — Stories, chat reactions, Discover feed
 - **Stories** (`routes/stories.py`, `components/stories/*`): 24h TTL stories (gallery upload with caption, or "Add to your story" from Share dialog). Story rings above the home feed (own + followed, gradient = unseen, grey = seen), fullscreen viewer (5s auto-advance, tap left/right, hold to pause, Esc), owner "Seen by N" viewer list + delete.

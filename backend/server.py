@@ -140,6 +140,7 @@ async def startup_event():
     deps.security_manager = security_manager
     await ensure_auth_indexes(db)
     await ensure_story_indexes(db)
+    await db.post_product_clicks.create_index([("post_id", 1), ("index", 1)])
     logging.info("Security manager initialized")
 
 # Models
@@ -3237,6 +3238,7 @@ from routes.captions import router as captions_router
 from routes.share import router as share_router
 from routes.stories import router as stories_router, ensure_story_indexes
 from routes.feed import router as feed_router
+from routes.post_products import router as post_products_router
 api_router.include_router(outfits_router)
 api_router.include_router(affiliate_router)
 api_router.include_router(payouts_live_router)
@@ -3247,6 +3249,7 @@ api_router.include_router(captions_router)
 api_router.include_router(share_router)
 api_router.include_router(stories_router)
 api_router.include_router(feed_router)
+api_router.include_router(post_products_router)
 
 # Include the router in the main app
 app.include_router(api_router)

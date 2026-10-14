@@ -15,6 +15,7 @@ export default function PostDetail() {
   const navigate = useNavigate();
   const [post, setPost] = useState(null);
   const [shareOpen, setShareOpen] = useState(false);
+  const [productClicks, setProductClicks] = useState(null);
   const [user, setUser] = useState(null);
   const [currentUser, setCurrentUser] = useState(null);
   const [comments, setComments] = useState([]);
@@ -38,6 +39,11 @@ export default function PostDetail() {
       setCurrentUser(currentUserRes.data);
       setIsLiked(postRes.data.liked_by?.includes(currentUserRes.data.user_id));
       setIsStarred(postRes.data.starred_by?.includes(currentUserRes.data.user_id));
+      if (postRes.data.user_id === currentUserRes.data.user_id && postRes.data.products?.length) {
+        axios.get(`${BACKEND_URL}/api/posts/${postId}/product-clicks`, { withCredentials: true })
+          .then(({ data }) => setProductClicks(Object.fromEntries(data.products.map((p) => [p.index, p.clicks]))))
+          .catch(() => {});
+      }
       
       const userRes = await axios.get(`${BACKEND_URL}/api/users/${postRes.data.user_id}`, { withCredentials: true });
       setUser(userRes.data);
@@ -320,13 +326,24 @@ export default function PostDetail() {
                   {post.products.map((product, index) => (
                     <a
                       key={index}
-                      href={product.url}
+                      data-testid={`post-product-link-${index}`}
+                      href={`${BACKEND_URL}/api/posts/${post.post_id}/products/${index}/go`}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="flex items-center justify-between p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors"
+                      className="flex items-center justify-between gap-3 p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors"
                     >
-                      <span className="font-manrope text-sm font-medium">{product.name}</span>
-                      <ExternalLink className="w-4 h-4 text-gray-500" />
+                      <span className="min-w-0">
+                        <span className="block font-manrope text-sm font-medium truncate">{product.name}</span>
+                        <span className="block font-manrope text-[10px] uppercase tracking-widest text-gray-500">Product Link</span>
+                      </span>
+                      <span className="flex items-center gap-3 shrink-0">
+                        {productClicks && (
+                          <span data-testid={`post-product-clicks-${index}`} className="font-manrope text-xs text-gray-500">
+                            {productClicks[index] ?? 0} clicks
+                          </span>
+                        )}
+                        <ExternalLink className="w-4 h-4 text-gray-500" />
+                      </span>
                     </a>
                   ))}
                 </div>
