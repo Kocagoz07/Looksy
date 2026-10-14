@@ -56,6 +56,11 @@ Build a fashion social media application named "Looksy" similar to Instagram wit
 
 ## What's Been Implemented
 
+### Session: Oct 14, 2026 — Story product tags + DM inbox
+- **Shop the look on stories**: up to 5 products (name, link, optional € price) per story, edited in StoryComposer; adding a post to story opens the composer pre-filled with the post's product links (editable). Viewer shows product chips; tap pauses the story and opens a product card (name, price, store) with "Buy now" → `/api/affiliate/track/{link_id}` (click tracked in `affiliate_links` with `story_id`). Owner sees per-product click counts in the "Seen by" sheet.
+- **DM inbox**: header Messages button with unread badge → /chat. After sharing a post via DM the user is taken to that conversation (or /chat for multiple recipients).
+- Testing: iteration_13 — backend 12/12, frontend 6/6 phases passed.
+
 ### Session: Oct 13, 2026 (cont. 2) — Stories, chat reactions, Discover feed
 - **Stories** (`routes/stories.py`, `components/stories/*`): 24h TTL stories (gallery upload with caption, or "Add to your story" from Share dialog). Story rings above the home feed (own + followed, gradient = unseen, grey = seen), fullscreen viewer (5s auto-advance, tap left/right, hold to pause, Esc), owner "Seen by N" viewer list + delete.
 - **Chat quick reactions** on shared-post cards: double tap = ❤️ (burst animation), long press = 6-emoji picker; one reaction per user (toggle/replace), real-time WS `message:reaction`, notification type `reaction` to sender.
@@ -330,6 +335,8 @@ Build a fashion social media application named "Looksy" similar to Instagram wit
 - [x] Stories (24h) + viewer list
 - [x] Chat quick reactions on shared posts
 - [x] Following / Discover feed + Popular for you
+- [x] Story product tags (Shop the look) + click tracking
+- [x] DM inbox button
 - [x] Live currency rate + PayPal Payouts (sandbox)
 
 ### P0 - Next

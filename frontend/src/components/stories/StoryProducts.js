@@ -16,7 +16,7 @@ export const ProductStrip = ({ products, onOpen }) => (
 );
 
 export const ProductCardSheet = ({ product, onClose }) => {
-  const buy = () => window.open(`${BACKEND_URL}/api/affiliate/track/${product.link_id}`, "_blank", "noopener");
+  const buy = () => window.open(`${BACKEND_URL}/api/affiliate/track/${product.link_id}`, "_blank", "noopener,noreferrer");
   return (
     <div className="absolute inset-0 z-30 flex items-end" onPointerDown={(e) => e.stopPropagation()}>
       <div className="absolute inset-0 bg-black/40" onClick={onClose} />
