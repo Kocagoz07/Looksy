@@ -7,6 +7,8 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { apiErrorMessage } from "@/utils/apiError";
+import { useNavigate } from "react-router-dom";
+import { StoryComposer } from "@/components/stories/StoryComposer";
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 const MAX_RECIPIENTS = 10;
@@ -35,19 +37,12 @@ export const SharePostDialog = ({ open, onOpenChange, postId }) => {
   const [selected, setSelected] = useState([]);
   const [note, setNote] = useState("");
   const [sending, setSending] = useState(false);
-  const [addingStory, setAddingStory] = useState(false);
+  const [storySource, setStorySource] = useState(null);
+  const navigate = useNavigate();
 
-  const addToStory = async () => {
-    setAddingStory(true);
-    try {
-      await axios.post(`${BACKEND_URL}/api/stories/from-post/${postId}`, {}, { withCredentials: true });
-      toast.success("Added to your story");
-      close(false);
-    } catch (err) {
-      toast.error(apiErrorMessage(err, "Could not add to story"));
-    } finally {
-      setAddingStory(false);
-    }
+  const addToStory = () => {
+    close(false);
+    setStorySource({ type: "post", postId });
   };
 
   useEffect(() => {
@@ -82,6 +77,7 @@ export const SharePostDialog = ({ open, onOpenChange, postId }) => {
         { recipient_ids: selected, note: note.trim() || null }, { withCredentials: true });
       toast.success(`Sent to ${data.shared} ${data.shared === 1 ? "person" : "people"}`);
       close(false);
+      navigate(data.results.length === 1 ? `/chat/${data.results[0].conversation_id}` : "/chat");
     } catch (err) {
       toast.error(apiErrorMessage(err, "Could not share post"));
     } finally {
@@ -90,16 +86,17 @@ export const SharePostDialog = ({ open, onOpenChange, postId }) => {
   };
 
   return (
+    <>
     <Dialog open={open} onOpenChange={close}>
       <DialogContent data-testid="share-post-dialog" className="sm:max-w-md p-0 gap-0 overflow-hidden">
         <DialogHeader className="px-5 pt-5 pb-3 border-b">
           <DialogTitle className="font-italiana text-3xl">Share</DialogTitle>
         </DialogHeader>
-        <button type="button" data-testid="share-add-to-story-btn" onClick={addToStory} disabled={addingStory}
+        <button type="button" data-testid="share-add-to-story-btn" onClick={addToStory}
           className="mx-5 mt-3 flex items-center gap-3 rounded-2xl border border-gray-200 px-4 py-3 text-left transition-colors duration-200 hover:border-black disabled:opacity-50">
           <span className="w-10 h-10 rounded-full bg-gradient-to-tr from-[#800020] via-[#C2185B] to-[#D4AF37] p-[2px]">
             <span className="w-full h-full rounded-full bg-white flex items-center justify-center">
-              {addingStory ? <Loader2 className="w-4 h-4 animate-spin" /> : <CirclePlus className="w-5 h-5" />}
+              <CirclePlus className="w-5 h-5" />
             </span>
           </span>
           <span className="font-manrope">
@@ -134,5 +131,7 @@ export const SharePostDialog = ({ open, onOpenChange, postId }) => {
         </div>
       </DialogContent>
     </Dialog>
+    <StoryComposer source={storySource} onClose={() => setStorySource(null)} onPosted={() => setStorySource(null)} />
+    </>
   );
 };

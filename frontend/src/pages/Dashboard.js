@@ -12,6 +12,7 @@ import {
 } from "@/components/ui/dialog";
 import { EmailVerifyBanner } from "@/components/EmailVerifyBanner";
 import { NotificationBell } from "@/components/NotificationBell";
+import { InboxButton } from "@/components/InboxButton";
 import { StoriesBar } from "@/components/stories/StoriesBar";
 import { HomeFeed } from "@/components/HomeFeed";
 import PostCard from "@/components/PostCard";
@@ -129,7 +130,7 @@ export default function Dashboard({ category = null }) {
             Looksy
           </h1>
           
-          <div className="flex items-center gap-0 sm:gap-3">
+          <div className="flex items-center gap-0 sm:gap-3 max-sm:[&_button]:w-8 max-sm:[&_button]:h-8 max-sm:[&_button]:px-0">
             {/* Search Users */}
             <Button
               data-testid="search-users-btn"
@@ -143,6 +144,7 @@ export default function Dashboard({ category = null }) {
             </Button>
             
             <NotificationBell />
+            <InboxButton />
 
             {/* Celebrity Posts */}
             <Button

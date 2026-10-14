@@ -71,7 +71,7 @@ export const StoriesBar = ({ currentUser }) => {
       {openAt !== null && (
         <StoryViewer groups={groups} startGroup={openAt} onClose={() => { setOpenAt(null); load(); }} />
       )}
-      <StoryComposer file={file} onClose={() => setFile(null)} onPosted={() => { setFile(null); load(); }} />
+      <StoryComposer source={file ? { type: "file", file } : null} onClose={() => setFile(null)} onPosted={() => { setFile(null); load(); }} />
     </section>
   );
 };

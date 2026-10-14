@@ -5,6 +5,7 @@ import axios from "axios";
 import { toast } from "sonner";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { StoryViewersSheet } from "@/components/stories/StoryViewersSheet";
+import { ProductStrip, ProductCardSheet } from "@/components/stories/StoryProducts";
 import { picUrl, imageUrl, timeAgo } from "@/utils/media";
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
@@ -32,6 +33,7 @@ export const StoryViewer = ({ groups, startGroup, onClose }) => {
   const [loaded, setLoaded] = useState(false);
   const [paused, setPaused] = useState(false);
   const [viewersOpen, setViewersOpen] = useState(false);
+  const [product, setProduct] = useState(null);
   const downAt = useRef(0);
 
   const group = groups[g];
@@ -59,10 +61,10 @@ export const StoryViewer = ({ groups, startGroup, onClose }) => {
   }, [story, group]);
 
   useEffect(() => {
-    if (!loaded || paused || viewersOpen) return;
+    if (!loaded || paused || viewersOpen || product) return;
     const id = setInterval(() => setProgress((p) => p + TICK_MS / DURATION_MS), TICK_MS);
     return () => clearInterval(id);
-  }, [loaded, paused, viewersOpen, story]);
+  }, [loaded, paused, viewersOpen, product, story]);
 
   useEffect(() => {
     if (progress < 1) return;
@@ -126,6 +128,7 @@ export const StoryViewer = ({ groups, startGroup, onClose }) => {
 
         <div className="absolute inset-x-0 bottom-0 z-20 p-4 space-y-3 text-white">
           {story.caption && <p data-testid="story-caption" className="font-manrope text-base text-center">{story.caption}</p>}
+          {story.products?.length > 0 && <ProductStrip products={story.products} onOpen={setProduct} />}
           <div className="flex items-center gap-2">
             {story.shared_post && (
               <button data-testid="story-view-post-btn" onClick={() => navigate(`/post/${story.shared_post.post_id}`)}
@@ -148,6 +151,7 @@ export const StoryViewer = ({ groups, startGroup, onClose }) => {
           </div>
         </div>
 
+        {product && <ProductCardSheet product={product} onClose={() => setProduct(null)} />}
         {viewersOpen && <StoryViewersSheet storyId={story.story_id} onClose={() => setViewersOpen(false)} />}
       </div>
     </div>

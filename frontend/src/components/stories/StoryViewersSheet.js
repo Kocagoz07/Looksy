@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Eye, X } from "lucide-react";
+import { Eye, X, ShoppingBag } from "lucide-react";
 import axios from "axios";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { picUrl, timeAgo } from "@/utils/media";
@@ -8,10 +8,11 @@ const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 
 export const StoryViewersSheet = ({ storyId, onClose }) => {
   const [viewers, setViewers] = useState(null);
+  const [clicks, setClicks] = useState([]);
 
   useEffect(() => {
     axios.get(`${BACKEND_URL}/api/stories/${storyId}/viewers`, { withCredentials: true })
-      .then(({ data }) => setViewers(data.viewers))
+      .then(({ data }) => { setViewers(data.viewers); setClicks(data.product_clicks || []); })
       .catch(() => setViewers([]));
   }, [storyId]);
 
@@ -25,6 +26,18 @@ export const StoryViewersSheet = ({ storyId, onClose }) => {
         <button data-testid="story-viewers-close-btn" onClick={onClose} className="p-1 rounded-full hover:bg-gray-100"><X className="w-5 h-5" /></button>
       </div>
       <div className="overflow-y-auto px-3 py-2">
+        {clicks.length > 0 && (
+          <div data-testid="story-product-clicks" className="mx-2 mb-2 rounded-2xl bg-gray-50 p-3 space-y-1.5">
+            <p className="font-manrope text-xs font-semibold uppercase tracking-widest text-gray-500 flex items-center gap-2">
+              <ShoppingBag className="w-3.5 h-3.5" /> Product clicks · {clicks.reduce((n, c) => n + c.clicks, 0)}
+            </p>
+            {clicks.map((c, i) => (
+              <div key={c.link_id} data-testid={`story-product-clicks-${i}`} className="flex justify-between font-manrope text-sm">
+                <span className="truncate pr-3">{c.name}</span><span className="font-semibold">{c.clicks}</span>
+              </div>
+            ))}
+          </div>
+        )}
         {viewers?.length === 0 && (
           <p data-testid="story-viewers-empty" className="py-8 text-center font-manrope text-sm text-gray-500">No views yet.</p>
         )}
