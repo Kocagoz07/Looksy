@@ -1,6 +1,5 @@
 """Tracked redirects for post product links + owner-only click stats."""
 
-from datetime import datetime, timezone
 from urllib.parse import urlparse
 
 from fastapi import APIRouter, HTTPException, Request
@@ -37,15 +36,11 @@ async def go_to_product(post_id: str, index: int, request: Request):
     target = _safe_url(products[index].get("url"))
 
     user = await deps.get_current_user(request)
-    if not user or user.user_id != post["user_id"]:
-        await deps.db.post_product_clicks.insert_one({
-            "post_id": post_id,
-            "index": index,
-            "user_id": user.user_id if user else None,
-            "ip_address": request.client.host if request.client else None,
-            "clicked_at": datetime.now(timezone.utc).isoformat(),
-        })
-    return RedirectResponse(url=target, status_code=302)
+    result = await deps.click_revenue.record(
+        request=request, user=user, source="post_product", link_ref=f"{post_id}:{index}",
+        owner_id=post["user_id"], target_url=target, extra={"post_id": post_id, "product_index": index},
+    )
+    return RedirectResponse(url=result["redirect_url"], status_code=302)
 
 
 @router.get("/posts/{post_id}/product-clicks")
@@ -57,9 +52,9 @@ async def product_clicks(post_id: str, request: Request):
     if post["user_id"] != user.user_id:
         raise HTTPException(status_code=403, detail="Only the post owner can see product clicks")
 
-    rows = await deps.db.post_product_clicks.aggregate([
-        {"$match": {"post_id": post_id}},
-        {"$group": {"_id": "$index", "clicks": {"$sum": 1}}},
+    rows = await deps.db.link_clicks.aggregate([
+        {"$match": {"post_id": post_id, "source": "post_product", "suspicious": False, "reasons": {"$ne": "self_click"}}},
+        {"$group": {"_id": "$product_index", "clicks": {"$sum": 1}}},
     ]).to_list(100)
     counts = {r["_id"]: r["clicks"] for r in rows}
     items = [{"index": i, "name": p.get("name"), "clicks": counts.get(i, 0)} for i, p in enumerate(post.get("products") or [])]

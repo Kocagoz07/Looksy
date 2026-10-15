@@ -42,22 +42,20 @@ async def affiliate_suggest(payload: AffiliateSuggestRequest, request: Request):
 
 @router.get("/affiliate/track/{link_id}")
 async def affiliate_track(link_id: str, request: Request):
-    """Track a click and redirect to the retailer. Public endpoint."""
+    """Track a click (platform CPC ledger) and redirect to the retailer. Public endpoint."""
+    link = await deps.db.affiliate_links.find_one({"link_id": link_id}, {"_id": 0})
+    if not link:
+        raise HTTPException(status_code=404, detail="Affiliate link not found")
     user = await deps.get_current_user(request)
-    ip = request.client.host if request.client else None
-    device = request.headers.get("X-Device-Fingerprint")
-    try:
-        result = await deps.affiliate_engine.track_click(
-            link_id=link_id,
-            clicker_user_id=user.user_id if user else None,
-            ip_address=ip,
-            device_fingerprint=device,
-            fraud_service=deps.fraud_service,
-        )
-    except ValueError as ve:
-        raise HTTPException(status_code=404, detail=str(ve))
-
-    return RedirectResponse(url=result["target_url"], status_code=302)
+    result = await deps.click_revenue.record(
+        request=request, user=user,
+        source="story_product" if link.get("story_id") else "affiliate",
+        link_ref=link_id, owner_id=link.get("user_id"), target_url=link["target_url"],
+        extra={"story_id": link.get("story_id"), "outfit_id": link.get("outfit_id"), "post_id": link.get("post_id")},
+    )
+    if not {"bot", "ip_rate_limit", "self_click"} & set(result["reasons"]):
+        await deps.db.affiliate_links.update_one({"link_id": link_id}, {"$inc": {"clicks": 1}})
+    return RedirectResponse(url=result["redirect_url"], status_code=302)
 
 
 @router.get("/affiliate/my-links")

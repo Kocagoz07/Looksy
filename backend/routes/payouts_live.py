@@ -71,6 +71,29 @@ async def stripe_connect_status(request: Request):
         raise HTTPException(status_code=503, detail=str(e))
 
 
+PAYPAL_FAILURE_EVENTS = {
+    "PAYMENT.PAYOUTS-ITEM.FAILED", "PAYMENT.PAYOUTS-ITEM.RETURNED", "PAYMENT.PAYOUTS-ITEM.BLOCKED",
+    "PAYMENT.PAYOUTS-ITEM.CANCELED", "PAYMENT.PAYOUTS-ITEM.DENIED", "PAYMENT.PAYOUTS-ITEM.REFUNDED",
+}
+FINAL_FAILED = ["failed", "rejected"]
+
+
+async def refund_failed_payouts(query: dict, reason: str) -> int:
+    """Mark matching payouts failed and give the escrowed balance back exactly once."""
+    refunded = 0
+    while True:
+        payout = await deps.db.payouts.find_one_and_update(
+            {**query, "status": {"$nin": FINAL_FAILED}, "refunded": {"$ne": True}},
+            {"$set": {"status": "failed", "refunded": True, "failure_message": reason,
+                      "updated_at": datetime.now(timezone.utc).isoformat()}},
+        )
+        if not payout:
+            return refunded
+        await deps.db.users.update_one({"user_id": payout["user_id"]}, {"$inc": {"payout_points": payout["amount_eur"]}})
+        logger.info(f"Refunded €{payout['amount_eur']} for failed payout {payout['payout_id']}")
+        refunded += 1
+
+
 @router.post("/payouts/stripe/webhook")
 async def stripe_payouts_webhook(request: Request):
     """Stripe webhook for account.updated, payout.paid, payout.failed, transfer.*"""
@@ -103,13 +126,9 @@ async def stripe_payouts_webhook(request: Request):
             {"stripe_transfer_id": data.get("id")},
             {"$set": {"status": "succeeded" if event_type == "transfer.paid" else "processing"}},
         )
-    elif event_type == "payout.failed":
-        await deps.db.payouts.update_many(
-            {"stripe_transfer_id": data.get("id")},
-            {"$set": {
-                "status": "failed",
-                "failure_message": data.get("failure_message"),
-            }},
+    elif event_type in ("transfer.reversed", "transfer.failed", "payout.failed"):
+        await refund_failed_payouts(
+            {"stripe_transfer_id": data.get("id")}, data.get("failure_message") or event_type
         )
 
     return {"received": True}
@@ -137,9 +156,10 @@ async def paypal_payouts_webhook(request: Request):
             {"paypal_batch_id": resource.get("payout_batch_id")},
             {"$set": {"status": "succeeded"}},
         )
-    elif event_type == "PAYMENT.PAYOUTS-ITEM.FAILED":
-        await deps.db.payouts.update_many(
+    elif event_type in PAYPAL_FAILURE_EVENTS:
+        errors = resource.get("errors")
+        await refund_failed_payouts(
             {"paypal_batch_id": resource.get("payout_batch_id")},
-            {"$set": {"status": "failed", "failure_message": resource.get("errors")}},
+            (errors.get("message") if isinstance(errors, dict) else None) or event_type,
         )
     return {"received": True}
