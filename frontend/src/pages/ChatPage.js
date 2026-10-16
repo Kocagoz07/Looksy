@@ -9,6 +9,7 @@ import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
 import { Avatar, AvatarFallback, AvatarImage } from '../components/ui/avatar';
 import { ScrollArea } from '../components/ui/scroll-area';
+import { MessageContent } from '../components/SharedPostMessage';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -123,6 +124,12 @@ const ChatPage = ({ user }) => {
         ));
         break;
       
+      case 'message:reaction':
+        setMessages(prev => prev.map(m =>
+          m.message_id === data.message_id ? { ...m, reactions: data.reactions } : m
+        ));
+        break;
+
       case 'typing:update':
         setTypingUsers(prev => ({
           ...prev,
@@ -153,10 +160,10 @@ const ChatPage = ({ user }) => {
       }
     };
 
-    if (user) {
+    if (currentUser) {
       fetchConversations();
     }
-  }, [user]);
+  }, [currentUser]);
 
   // Fetch current user if not passed
   useEffect(() => {
@@ -535,7 +542,7 @@ const ChatPage = ({ user }) => {
                               : 'bg-gray-100 text-gray-900 rounded-bl-md'
                           } ${message.failed ? 'opacity-60' : ''}`}
                         >
-                          <p className="text-sm whitespace-pre-wrap break-words">{message.content}</p>
+                          <MessageContent message={message} currentUserId={effectiveUser?.user_id} />
                         </div>
                         
                         <div className={`flex items-center gap-1 mt-1 text-xs text-gray-400 ${isOwn ? 'justify-end' : ''}`}>

@@ -1,87 +1,23 @@
-# Auth-Gated App Testing Playbook
+# Looksy Auth Testing Playbook
 
-## Step 1: Create Test User & Session
-```bash
-mongosh --eval "
-use('test_database');
-var userId = 'test-user-' + Date.now();
-var sessionToken = 'test_session_' + Date.now();
-db.users.insertOne({
-  user_id: userId,
-  email: 'test.user.' + Date.now() + '@example.com',
-  name: 'Test User',
-  picture: 'https://via.placeholder.com/150',
-  category: 'men',
-  earnings: 0.0,
-  created_at: new Date()
-});
-db.user_sessions.insertOne({
-  user_id: userId,
-  session_token: sessionToken,
-  expires_at: new Date(Date.now() + 7*24*60*60*1000),
-  created_at: new Date()
-});
-print('Session token: ' + sessionToken);
-print('User ID: ' + userId);
-"
-```
+Auth is session-cookie based (`session_token` httpOnly cookie, 7 days, stored in `user_sessions`). Passwords hashed with bcrypt (`$2b$`). Emails are MOCKED: links are logged to `/var/log/supervisor/backend.err.log` with prefix `[MOCK EMAIL]`. `AUTH_DEV_MODE=true` also returns links in API responses.
 
-## Step 2: Test Backend API
-```bash
-# Test auth endpoint
-curl -X GET "https://fashion-hub-1308.preview.emergentagent.com/api/auth/me" \
-  -H "Authorization: Bearer YOUR_SESSION_TOKEN"
+## MongoDB checks (DB: test_database)
+- `db.users.getIndexes()` -> unique `email`
+- `db.password_reset_tokens.getIndexes()` / `db.email_verification_tokens.getIndexes()` -> TTL on `expires_at`, unique `token_hash`
+- Tokens are stored as SHA-256 hashes, never raw.
 
-# Test posts endpoint
-curl -X GET "https://fashion-hub-1308.preview.emergentagent.com/api/posts" \
-  -H "Authorization: Bearer YOUR_SESSION_TOKEN"
-```
+## Endpoints
+- POST /api/auth/register {email,password(>=8),name,category} -> user with email_verified=false, verification link logged
+- POST /api/auth/register-with-phone (OTP flow)
+- POST /api/auth/login {email,password,category}
+- GET /api/auth/me, POST /api/auth/logout
+- POST /api/auth/forgot-password {email} -> generic message (+ reset_link in dev mode, only for existing users); 60s cooldown per user
+- POST /api/auth/reset-password {token,new_password} -> single-use, 1h expiry, invalidates all sessions, marks email verified
+- POST /api/auth/verify-email {token} -> email_verified=true
+- POST /api/auth/resend-verification (auth) -> 60s cooldown; verification_link in dev mode
 
-## Step 3: Browser Testing
-Set cookie and navigate to app:
-```python
-await page.context.add_cookies([{
-    "name": "session_token",
-    "value": "YOUR_SESSION_TOKEN",
-    "domain": "looksy-fashion.preview.emergentagent.com",
-    "path": "/",
-    "httpOnly": True,
-    "secure": True,
-    "sameSite": "None"
-}]);
-await page.goto("https://fashion-hub-1308.preview.emergentagent.com/dashboard");
-```
-
-## Quick Debug
-```bash
-# Check data format
-mongosh --eval "
-use('test_database');
-db.users.find().limit(2).pretty();
-db.user_sessions.find().limit(2).pretty();
-"
-
-# Clean test data
-mongosh --eval "
-use('test_database');
-db.users.deleteMany({email: /test\.user\./});
-db.user_sessions.deleteMany({session_token: /test_session/});
-"
-```
-
-## Checklist
-- [ ] User document has user_id field (custom UUID)
-- [ ] Session user_id matches user's user_id exactly
-- [ ] All queries use `{"_id": 0}` projection
-- [ ] API returns user data with user_id field
-- [ ] Browser loads dashboard (not login page)
-
-## Success Indicators
-✅ /api/auth/me returns user data
-✅ Dashboard loads without redirect
-✅ CRUD operations work
-
-## Failure Indicators
-❌ "User not found" errors
-❌ 401 Unauthorized responses
-❌ Redirect to login page
+## Frontend
+- Landing page > "Email & Password" tab > "Forgot password?" (data-testid forgot-password-link)
+- /reset-password?token=..., /verify-email?token=...
+- Dashboard banner `email-verify-banner` shown only when email_verified === false

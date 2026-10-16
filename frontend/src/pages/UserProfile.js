@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { ArrowLeft, Camera, Edit2, Send, Plus, MessageSquare, UserPlus, UserCheck, Bookmark, Star, Wallet, CheckCircle, Shield, Heart, MessageCircle, X, Trash2 } from "lucide-react";
+import { ArrowLeft, Camera, Edit2, Send, Plus, MessageSquare, UserPlus, UserCheck, Bookmark, Star, Wallet, CheckCircle, Shield, Heart, MessageCircle, X, Trash2, MapPin } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
@@ -61,6 +61,16 @@ function PostGridItem({ post, onClick, isVisible, currentUserId, onDelete }) {
             loading="lazy"
             onLoad={() => setLoaded(true)}
           />
+
+          {post.location && (
+            <div
+              className="absolute top-2 left-2 flex items-center gap-1 px-2 py-1 rounded-full bg-black/55 backdrop-blur-sm text-white text-xs font-manrope shadow-sm z-10"
+              data-testid={`post-location-${post.post_id}`}
+            >
+              <MapPin className="w-3 h-3" />
+              <span className="max-w-[9rem] truncate">{post.location}</span>
+            </div>
+          )}
           {/* Hover overlay */}
           <div className="absolute inset-0 bg-black/40 opacity-0 hover:opacity-100 transition-opacity duration-200 flex items-center justify-center gap-6">
             <div className="flex items-center gap-1 text-white font-semibold">

@@ -1,9 +1,10 @@
 import { useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { ArrowLeft, Heart, Music, MapPin, Star, ExternalLink, MessageCircle, Trash2 } from "lucide-react";
+import { ArrowLeft, Heart, Music, MapPin, Star, ExternalLink, MessageCircle, Trash2, Send } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import BrandVerifiedBadge from "@/components/BrandVerifiedBadge";
+import { SharePostDialog } from "@/components/SharePostDialog";
 import axios from "axios";
 import { toast } from "sonner";
 
@@ -13,6 +14,8 @@ export default function PostDetail() {
   const { postId } = useParams();
   const navigate = useNavigate();
   const [post, setPost] = useState(null);
+  const [shareOpen, setShareOpen] = useState(false);
+  const [productClicks, setProductClicks] = useState(null);
   const [user, setUser] = useState(null);
   const [currentUser, setCurrentUser] = useState(null);
   const [comments, setComments] = useState([]);
@@ -36,6 +39,11 @@ export default function PostDetail() {
       setCurrentUser(currentUserRes.data);
       setIsLiked(postRes.data.liked_by?.includes(currentUserRes.data.user_id));
       setIsStarred(postRes.data.starred_by?.includes(currentUserRes.data.user_id));
+      if (postRes.data.user_id === currentUserRes.data.user_id && postRes.data.products?.length) {
+        axios.get(`${BACKEND_URL}/api/posts/${postId}/product-clicks`, { withCredentials: true })
+          .then(({ data }) => setProductClicks(Object.fromEntries(data.products.map((p) => [p.index, p.clicks]))))
+          .catch(() => {});
+      }
       
       const userRes = await axios.get(`${BACKEND_URL}/api/users/${postRes.data.user_id}`, { withCredentials: true });
       setUser(userRes.data);
@@ -145,11 +153,11 @@ export default function PostDetail() {
         <h1 className="font-playfair text-2xl font-bold">Post</h1>
       </header>
 
-      <main className="max-w-5xl mx-auto px-4 py-8">
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+      <main className="max-w-5xl mx-auto px-4 py-6 md:py-8">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 md:gap-8">
           {/* Image */}
           <div className="relative">
-            <div className="aspect-square rounded-lg overflow-hidden relative">
+            <div className="aspect-square rounded-lg overflow-hidden relative bg-gray-100">
               <img
                 src={`${BACKEND_URL}/api/images/${post.image_id}`}
                 alt={post.caption || "Post"}
@@ -162,31 +170,83 @@ export default function PostDetail() {
                 </div>
               )}
             </div>
+            
+            {/* User Info - Mobile: Directly below image */}
+            <div className="lg:hidden mt-4">
+              {user && (
+                <div 
+                  className="flex items-center gap-4 cursor-pointer hover:opacity-80 transition-opacity"
+                  onClick={() => navigate(`/profile/${user.user_id}`)}
+                >
+                  {user.picture ? (
+                    <img 
+                      src={user.picture.startsWith('http') ? user.picture : `${BACKEND_URL}${user.picture}`} 
+                      alt={user.name} 
+                      className="w-12 h-12 rounded-full object-cover border-2 border-gray-100 shadow-sm" 
+                    />
+                  ) : (
+                    <div className="w-12 h-12 rounded-full bg-gradient-to-br from-gray-200 to-gray-300 flex items-center justify-center border-2 border-gray-100 shadow-sm">
+                      <span className="font-playfair text-lg font-semibold text-gray-600">{user.name?.[0]?.toUpperCase()}</span>
+                    </div>
+                  )}
+                  <div className="flex-1">
+                    <div className="flex items-center gap-2">
+                      <p className="font-manrope font-semibold text-base">{user.name}</p>
+                      {user.brand_verified && <BrandVerifiedBadge size="sm" />}
+                    </div>
+                    {post.location && (
+                      <div className="flex items-center gap-1 text-gray-600 mt-0.5" data-testid="post-location-mobile">
+                        <MapPin className="w-3.5 h-3.5" />
+                        <span className="font-manrope text-sm">{post.location}{post.venue && ` • ${post.venue}`}</span>
+                      </div>
+                    )}
+                    {user.category && (
+                      <p className="font-manrope text-xs text-gray-500 capitalize mt-0.5">{user.category}</p>
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
           </div>
 
           {/* Details */}
           <div className="space-y-6">
-            {/* User Info */}
-            {user && (
-              <div className="flex items-center gap-3">
-                {user.picture ? (
-                  <img src={user.picture} alt={user.name} className="w-12 h-12 rounded-full" />
-                ) : (
-                  <div className="w-12 h-12 rounded-full bg-gray-200 flex items-center justify-center">
-                    <span className="font-playfair text-lg font-semibold">{user.name[0]}</span>
-                  </div>
-                )}
-                <div>
-                  <div className="flex items-center gap-1">
-                    <p className="font-manrope font-semibold">{user.name}</p>
-                    {user.brand_verified && <BrandVerifiedBadge size="sm" />}
-                  </div>
-                  {user.category && (
-                    <p className="font-manrope text-xs text-gray-500 capitalize">{user.category}</p>
+            {/* User Info - Desktop: In sidebar */}
+            <div className="hidden lg:block">
+              {user && (
+                <div 
+                  className="flex items-center gap-4 cursor-pointer hover:opacity-80 transition-opacity"
+                  onClick={() => navigate(`/profile/${user.user_id}`)}
+                >
+                  {user.picture ? (
+                    <img 
+                      src={user.picture.startsWith('http') ? user.picture : `${BACKEND_URL}${user.picture}`} 
+                      alt={user.name} 
+                      className="w-14 h-14 rounded-full object-cover border-2 border-gray-100 shadow-sm" 
+                    />
+                  ) : (
+                    <div className="w-14 h-14 rounded-full bg-gradient-to-br from-gray-200 to-gray-300 flex items-center justify-center border-2 border-gray-100 shadow-sm">
+                      <span className="font-playfair text-xl font-semibold text-gray-600">{user.name?.[0]?.toUpperCase()}</span>
+                    </div>
                   )}
+                  <div className="flex-1">
+                    <div className="flex items-center gap-2">
+                      <p className="font-manrope font-semibold text-base">{user.name}</p>
+                      {user.brand_verified && <BrandVerifiedBadge size="sm" />}
+                    </div>
+                    {post.location && (
+                      <div className="flex items-center gap-1 text-gray-600 mt-0.5" data-testid="post-location-desktop">
+                        <MapPin className="w-3.5 h-3.5" />
+                        <span className="font-manrope text-sm">{post.location}{post.venue && ` • ${post.venue}`}</span>
+                      </div>
+                    )}
+                    {user.category && (
+                      <p className="font-manrope text-xs text-gray-500 capitalize mt-0.5">{user.category}</p>
+                    )}
+                  </div>
                 </div>
-              </div>
-            )}
+              )}
+            </div>
 
             {/* Actions */}
             <div className="flex items-center gap-4">
@@ -209,6 +269,17 @@ export default function PostDetail() {
               >
                 <Star className={`w-6 h-6 ${isStarred ? 'fill-current text-yellow-500' : ''}`} />
               </Button>
+
+              <Button
+                data-testid="share-btn"
+                onClick={() => setShareOpen(true)}
+                variant="ghost"
+                className="flex items-center gap-2"
+                title="Share"
+              >
+                <Send className="w-6 h-6" />
+              </Button>
+              <SharePostDialog open={shareOpen} onOpenChange={setShareOpen} postId={post.post_id} />
             </div>
 
             {/* Caption */}
@@ -231,12 +302,6 @@ export default function PostDetail() {
                   <span className="font-manrope text-sm">Music Link</span>
                   <ExternalLink className="w-3 h-3" />
                 </a>
-              )}
-              {post.location && (
-                <div className="flex items-center gap-2 text-gray-700">
-                  <MapPin className="w-4 h-4" />
-                  <span className="font-manrope text-sm">{post.location}{post.venue && ` • ${post.venue}`}</span>
-                </div>
               )}
             </div>
 
@@ -261,13 +326,24 @@ export default function PostDetail() {
                   {post.products.map((product, index) => (
                     <a
                       key={index}
-                      href={product.url}
+                      data-testid={`post-product-link-${index}`}
+                      href={`${BACKEND_URL}/api/posts/${post.post_id}/products/${index}/go`}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="flex items-center justify-between p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors"
+                      className="flex items-center justify-between gap-3 p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors"
                     >
-                      <span className="font-manrope text-sm font-medium">{product.name}</span>
-                      <ExternalLink className="w-4 h-4 text-gray-500" />
+                      <span className="min-w-0">
+                        <span className="block font-manrope text-sm font-medium truncate">{product.name}</span>
+                        <span className="block font-manrope text-[10px] uppercase tracking-widest text-gray-500">Product Link</span>
+                      </span>
+                      <span className="flex items-center gap-3 shrink-0">
+                        {productClicks && (
+                          <span data-testid={`post-product-clicks-${index}`} className="font-manrope text-xs text-gray-500">
+                            {productClicks[index] ?? 0} clicks
+                          </span>
+                        )}
+                        <ExternalLink className="w-4 h-4 text-gray-500" />
+                      </span>
                     </a>
                   ))}
                 </div>

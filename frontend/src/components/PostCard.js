@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Heart, MessageCircle, Star, Trash2, Bookmark } from "lucide-react";
+import { Heart, MessageCircle, Star, Trash2, Bookmark, MapPin, Send } from "lucide-react";
+import { SharePostDialog } from "@/components/SharePostDialog";
 import { Button } from "@/components/ui/button";
 import DeleteConfirmDialog from "@/components/DeleteConfirmDialog";
 import axios from "axios";
@@ -10,6 +11,7 @@ const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 
 export default function PostCard({ post, currentUserId, onDelete }) {
   const navigate = useNavigate();
+  const [shareOpen, setShareOpen] = useState(false);
   const [likes, setLikes] = useState(post.likes_count);
   const [isLiked, setIsLiked] = useState(post.liked_by?.includes(currentUserId));
   const [isStarred, setIsStarred] = useState(post.starred_by?.includes(currentUserId));
@@ -115,6 +117,16 @@ export default function PostCard({ post, currentUserId, onDelete }) {
               <span>10K+</span>
             </div>
           )}
+
+          {post.location && (
+            <div
+              className="absolute top-2 left-2 flex items-center gap-1 px-2 py-1 rounded-full bg-black/55 backdrop-blur-sm text-white text-xs font-manrope shadow-sm"
+              data-testid={`post-location-${post.post_id}`}
+            >
+              <MapPin className="w-3 h-3" />
+              <span className="max-w-[9rem] truncate">{post.location}</span>
+            </div>
+          )}
           
           {/* Hover overlay */}
           <div className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-30 transition-all duration-200 flex items-center justify-center gap-6 opacity-0 group-hover:opacity-100">
@@ -161,6 +173,15 @@ export default function PostCard({ post, currentUserId, onDelete }) {
             >
               <Bookmark className={`w-5 h-5 ${isFavorited ? 'fill-current text-blue-500' : ''}`} />
             </button>
+
+            <button
+              data-testid={`share-btn-${post.post_id}`}
+              onClick={() => setShareOpen(true)}
+              className="flex items-center gap-1 hover:scale-110 transition-transform"
+              title="Share"
+            >
+              <Send className="w-5 h-5" />
+            </button>
             
             {isOwner && (
               <button
@@ -178,6 +199,7 @@ export default function PostCard({ post, currentUserId, onDelete }) {
             <p className="font-manrope text-xs opacity-70">Total: €{post.total_price_eur}</p>
           )}
         </div>
+        <SharePostDialog open={shareOpen} onOpenChange={setShareOpen} postId={post.post_id} />
       </div>
 
       <DeleteConfirmDialog

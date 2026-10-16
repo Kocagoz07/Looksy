@@ -9,6 +9,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { apiErrorMessage } from "@/utils/apiError";
 import axios from "axios";
 import { toast } from "sonner";
 
@@ -92,7 +93,7 @@ export default function RegisterModal({ open, onOpenChange, selectedGender, onSu
       setStep(2);
     } catch (err) {
       console.error("Send OTP error:", err);
-      toast.error(err.response?.data?.detail || "Failed to send OTP. Please try again.");
+      toast.error(apiErrorMessage(err, "Failed to send OTP. Please try again."));
     } finally {
       setLoading(false);
     }
@@ -118,7 +119,7 @@ export default function RegisterModal({ open, onOpenChange, selectedGender, onSu
       setStep(3);
     } catch (err) {
       console.error("Verify OTP error:", err);
-      toast.error(err.response?.data?.detail || "Invalid OTP. Please try again.");
+      toast.error(apiErrorMessage(err, "Invalid OTP. Please try again."));
     } finally {
       setLoading(false);
     }
@@ -138,8 +139,8 @@ export default function RegisterModal({ open, onOpenChange, selectedGender, onSu
       return;
     }
 
-    if (password.length < 6) {
-      toast.error("Password must be at least 6 characters");
+    if (password.length < 8) {
+      toast.error("Password must be at least 8 characters");
       return;
     }
 
@@ -174,7 +175,7 @@ export default function RegisterModal({ open, onOpenChange, selectedGender, onSu
       onSuccess();
     } catch (err) {
       console.error("Registration error:", err);
-      toast.error(err.response?.data?.detail || "Registration failed. Please try again.");
+      toast.error(apiErrorMessage(err, "Registration failed. Please try again."));
     } finally {
       setLoading(false);
     }
@@ -421,7 +422,7 @@ export default function RegisterModal({ open, onOpenChange, selectedGender, onSu
             {/* Submit Button */}
             <Button
               type="submit"
-              disabled={loading || password !== confirmPassword || password.length < 6}
+              disabled={loading || password !== confirmPassword || password.length < 8}
               className="w-full h-12 bg-black text-white hover:bg-gray-900 rounded-full font-manrope font-semibold"
               data-testid="register-submit-btn"
             >

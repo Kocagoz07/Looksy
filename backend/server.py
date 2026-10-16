@@ -21,6 +21,9 @@ from passlib.context import CryptContext
 from emergentintegrations.llm.chat import LlmChat, UserMessage
 from emergentintegrations.payments.stripe.checkout import StripeCheckout, CheckoutSessionResponse, CheckoutStatusResponse, CheckoutSessionRequest
 
+import deps
+from routes.auth_extras import ensure_auth_indexes, issue_email_verification
+
 # Import security module
 from security import (
     SecurityManager, SECURITY_HEADERS, get_client_ip,
@@ -134,6 +137,10 @@ async def startup_event():
     global security_manager
     security_manager = SecurityManager(db)
     await security_manager.initialize()
+    deps.security_manager = security_manager
+    await ensure_auth_indexes(db)
+    await ensure_story_indexes(db)
+    await db.post_product_clicks.create_index([("post_id", 1), ("index", 1)])
     logging.info("Security manager initialized")
 
 # Models
@@ -161,6 +168,7 @@ class User(BaseModel):
     following: List[str] = []  # List of user_ids
     brand_verified: bool = False  # Brand partnership verified badge
     brand_verified_at: Optional[datetime] = None  # When brand verification was granted
+    email_verified: Optional[bool] = None
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
 class ProductLink(BaseModel):
@@ -222,7 +230,7 @@ class EmailPasswordLogin(BaseModel):
 
 class EmailPasswordRegister(BaseModel):
     email: EmailStr
-    password: str
+    password: str = Field(min_length=8, max_length=128)
     name: str
     category: str
 
@@ -301,8 +309,8 @@ class VerifyOTPRequest(BaseModel):
     otp_code: str
 
 class RegisterWithPhoneRequest(BaseModel):
-    email: str
-    password: str
+    email: EmailStr
+    password: str = Field(min_length=8, max_length=128)
     name: str
     category: str
     phone_number: str
@@ -337,10 +345,8 @@ class PayPalPayoutRequest(BaseModel):
     amount_eur: float
     paypal_email: str
 
-# Helper function to convert USD to EUR
-def usd_to_eur(usd_amount: float) -> float:
-    rate = float(os.environ.get('USD_TO_EUR_RATE', '0.92'))
-    return round(usd_amount * rate, 2)
+# Helper function to convert USD to EUR (live rate, cached + auto-refreshed)
+from currency import usd_to_eur, get_converter  # noqa: E402
 
 # Helper function to calculate earnings from likes
 def calculate_earnings(likes_count: int) -> float:
@@ -359,24 +365,33 @@ def calculate_earnings(likes_count: int) -> float:
 # 1001-5000 stars: €0.10 per star
 # 5001-10000 stars: €0.25 per star
 # Max 10,000 stars per post
-def calculate_payout_points(stars: int) -> float:
-    """Convert stars to payout points (EUR value) - flat rate per tier"""
-    if stars <= 0:
+def calculate_payout_points(stars_to_convert: int, total_stars: int = None) -> float:
+    """Convert stars to payout points (EUR value) - tier based on total stars"""
+    if stars_to_convert <= 0:
         return 0.0
     
-    # Cap at 10,000 stars
-    stars = min(stars, 10000)
+    # Use total_stars to determine tier, or stars_to_convert if not provided
+    tier_stars = total_stars if total_stars is not None else stars_to_convert
+    tier_stars = min(tier_stars, 10000)
+    stars_to_convert = min(stars_to_convert, 10000)
     
-    # Determine tier and apply flat rate
-    if stars <= 1000:
-        # Tier 1: 0-1000 stars → €0.05 per star
-        return round(stars * 0.05, 2)
-    elif stars <= 5000:
-        # Tier 2: 1001-5000 stars → €0.10 per star (flat rate for ALL stars)
-        return round(stars * 0.10, 2)
+    # Determine rate based on user's total stars (tier)
+    if tier_stars <= 1000:
+        rate = 0.05  # Tier 1: €0.05 per star
+    elif tier_stars <= 5000:
+        rate = 0.10  # Tier 2: €0.10 per star
     else:
-        # Tier 3: 5001-10000 stars → €0.25 per star (flat rate for ALL stars)
-        return round(stars * 0.25, 2)
+        rate = 0.25  # Tier 3: €0.25 per star
+    
+    return round(stars_to_convert * rate, 2)
+
+async def notify(user_id: str, actor_id: str, n_type: str, preview: str, **kwargs):
+    if not notification_service:
+        return
+    try:
+        await notification_service.emit(user_id, actor_id, n_type, preview, **kwargs)
+    except Exception as e:
+        logger.warning(f"Notification emit failed ({n_type}): {e}")
 
 # Auth helper
 async def get_current_user(request: Request) -> Optional[User]:
@@ -574,7 +589,12 @@ async def register_with_phone(request: RegisterWithPhoneRequest, response: Respo
     user_dict["phone_number"] = phone
     user_dict["phone_verified"] = True
     user_dict["phone_verified_at"] = otp_record["verified_at"]
+    user_dict["email_verified"] = False
     await db.users.insert_one(user_dict)
+    try:
+        await issue_email_verification(user_id, email)
+    except Exception as e:
+        logger.error(f"Email verification issuance failed for {email}: {e}")
     
     # Clean up OTP record
     await db.otp_verifications.delete_many({"phone_number": phone})
@@ -634,7 +654,12 @@ async def register_with_password(request: EmailPasswordRegister, response: Respo
     
     user_dict = new_user.model_dump()
     user_dict["created_at"] = user_dict["created_at"].isoformat()
+    user_dict["email_verified"] = False
     await db.users.insert_one(user_dict)
+    try:
+        await issue_email_verification(user_id, email)
+    except Exception as e:
+        logger.error(f"Email verification issuance failed for {email}: {e}")
     
     # Create session
     session_token = f"session_{secrets.token_urlsafe(32)}"
@@ -852,11 +877,10 @@ async def verify_magic_link(token: str, response: Response):
     if user_doc:
         user_id = user_doc["user_id"]
         # Update category if changed
-        if user_doc.get("category") != category:
-            await db.users.update_one(
-                {"user_id": user_id},
-                {"$set": {"category": category}}
-            )
+        await db.users.update_one(
+            {"user_id": user_id},
+            {"$set": {"category": category, "email_verified": True}}
+        )
     else:
         # Create new user
         user_id = f"user_{uuid.uuid4().hex[:12]}"
@@ -865,7 +889,8 @@ async def verify_magic_link(token: str, response: Response):
             user_id=user_id,
             email=email,
             name=name,
-            category=category
+            category=category,
+            email_verified=True
         )
         user_dict = new_user.model_dump()
         user_dict["created_at"] = user_dict["created_at"].isoformat()
@@ -1164,6 +1189,7 @@ async def toggle_star(request: Request, post_id: str):
             {"user_id": user.user_id},
             {"$addToSet": {"starred_posts": post_id}}
         )
+        await notify(post["user_id"], user.user_id, "star", "starred your post", post_id=post_id)
         return {"starred": True}
 
 @api_router.post("/posts/{post_id}/like")
@@ -1177,6 +1203,21 @@ async def toggle_like(request: Request, post_id: str):
         raise HTTPException(status_code=404, detail="Post not found")
     
     liked_by = post.get("liked_by", [])
+    
+    # Check for fraud on new likes only
+    if user.user_id not in liked_by and fraud_service:
+        fraud_check = await fraud_service.check_like_abuse(
+            liker_id=user.user_id,
+            post_owner_id=post["user_id"],
+            post_id=post_id
+        )
+        
+        if not fraud_check.get("allowed", True):
+            logger.warning(f"Like blocked for user {user.user_id}: {fraud_check['flags']}")
+            raise HTTPException(
+                status_code=429, 
+                detail="Action temporarily blocked. Please try again later."
+            )
     
     if user.user_id in liked_by:
         # Unlike
@@ -1198,6 +1239,7 @@ async def toggle_like(request: Request, post_id: str):
             }
         )
         new_likes = post["likes_count"] + 1
+        await notify(post["user_id"], user.user_id, "like", "liked your post", post_id=post_id)
     
     # Update post owner's earnings
     earnings_usd = calculate_earnings(new_likes)
@@ -1231,6 +1273,10 @@ async def create_comment(request: Request, post_id: str, comment_data: CommentCr
     if not user:
         raise HTTPException(status_code=401, detail="Not authenticated")
     
+    post = await db.posts.find_one({"post_id": post_id}, {"_id": 0, "user_id": 1})
+    if not post:
+        raise HTTPException(status_code=404, detail="Post not found")
+
     comment_id = f"comment_{uuid.uuid4().hex[:12]}"
     comment = Comment(
         comment_id=comment_id,
@@ -1244,6 +1290,9 @@ async def create_comment(request: Request, post_id: str, comment_data: CommentCr
     comment_dict = comment.model_dump()
     comment_dict["created_at"] = comment_dict["created_at"].isoformat()
     await db.comments.insert_one(comment_dict)
+    text = comment_data.text.strip()
+    await notify(post["user_id"], user.user_id, "comment",
+                 f"commented: {text[:80]}{'…' if len(text) > 80 else ''}", post_id=post_id)
     
     return comment
 
@@ -1342,6 +1391,7 @@ async def toggle_follow(request: Request, user_id: str):
             {"user_id": user_id},
             {"$addToSet": {"followers": user.user_id}}
         )
+        await notify(user_id, user.user_id, "follow", "started following you", target_user_id=user.user_id)
         return {"following": True}
 
 @api_router.post("/users/me/payout-method")
@@ -1395,38 +1445,170 @@ async def request_payout(request: Request, payout_req: PayoutRequest):
     if payout_req.amount_eur < min_threshold:
         raise HTTPException(status_code=400, detail=f"Minimum payout is €{min_threshold}")
     
-    # Check available balance
-    available_balance = user_doc.get("earnings_eur", 0.0)
+    # Check available balance - use payout_points (converted from stars)
+    available_balance = user_doc.get("payout_points", 0.0)
     if payout_req.amount_eur > available_balance:
-        raise HTTPException(status_code=400, detail="Insufficient balance")
+        raise HTTPException(status_code=400, detail=f"Insufficient balance. Available: €{available_balance:.2f}")
     
     # Create payout record
     payout_id = f"payout_{uuid.uuid4().hex[:12]}"
-    payout = Payout(
-        payout_id=payout_id,
-        user_id=user.user_id,
-        amount_eur=payout_req.amount_eur,
-        method=user_doc["payout_method"],
-        status="pending",
-        payout_email=user_doc.get("payout_email")
-    )
+    now = datetime.now(timezone.utc)
     
-    payout_dict = payout.model_dump()
-    payout_dict["created_at"] = payout_dict["created_at"].isoformat()
-    await db.payouts.insert_one(payout_dict)
+    payout_record = {
+        "payout_id": payout_id,
+        "user_id": user.user_id,
+        "amount_eur": payout_req.amount_eur,
+        "method": user_doc["payout_method"],
+        "status": "pending",
+        "payout_email": user_doc.get("payout_email"),
+        "created_at": now.isoformat(),
+        "updated_at": now.isoformat(),
+        "notes": None
+    }
     
-    # Deduct from user balance (escrow until payout completes)
+    await db.payouts.insert_one(payout_record)
+
+    # Deduct from user payout_points (escrow until payout completes)
     new_balance = available_balance - payout_req.amount_eur
     await db.users.update_one(
         {"user_id": user.user_id},
-        {"$set": {"earnings_eur": new_balance}}
+        {"$set": {"payout_points": new_balance}}
     )
-    
+
+    logger.info(f"Payout requested: {payout_id} for €{payout_req.amount_eur} via {user_doc['payout_method']}")
+
+    # ---- Attempt LIVE provider transfer if configured ----
+    live_result = {"provider_attempted": False}
+    method = user_doc["payout_method"]
+    try:
+        if method == "stripe" and stripe_connect_provider and stripe_connect_provider.configured:
+            transfer = await stripe_connect_provider.create_transfer(
+                user_id=user.user_id,
+                amount_eur=payout_req.amount_eur,
+                description=f"Looksy payout {payout_id}",
+            )
+            await db.payouts.update_one(
+                {"payout_id": payout_id},
+                {"$set": {
+                    "status": "processing",
+                    "stripe_transfer_id": transfer["transfer_id"],
+                    "updated_at": datetime.now(timezone.utc).isoformat(),
+                }},
+            )
+            live_result = {"provider_attempted": True, "provider": "stripe", "transfer_id": transfer["transfer_id"]}
+        elif method == "paypal" and paypal_payouts_provider and paypal_payouts_provider.configured:
+            batch = await paypal_payouts_provider.create_payout(
+                user_id=user.user_id,
+                email=user_doc.get("payout_email"),
+                amount_eur=payout_req.amount_eur,
+                note=f"Looksy payout {payout_id}",
+            )
+            await db.payouts.update_one(
+                {"payout_id": payout_id},
+                {"$set": {
+                    "status": "processing",
+                    "paypal_batch_id": batch["payout_batch_id"],
+                    "updated_at": datetime.now(timezone.utc).isoformat(),
+                }},
+            )
+            live_result = {"provider_attempted": True, "provider": "paypal", "batch_id": batch["payout_batch_id"]}
+        else:
+            logger.info(
+                f"Live payout skipped for {payout_id}: method={method}, "
+                f"stripe_configured={bool(stripe_connect_provider and stripe_connect_provider.configured)}, "
+                f"paypal_configured={bool(paypal_payouts_provider and paypal_payouts_provider.configured)}"
+            )
+    except Exception as e:
+        logger.error(f"Live payout failed for {payout_id}: {e}")
+        # Refund the deducted balance since the provider call failed
+        await db.users.update_one(
+            {"user_id": user.user_id},
+            {"$set": {"payout_points": available_balance}},
+        )
+        await db.payouts.update_one(
+            {"payout_id": payout_id},
+            {"$set": {"status": "failed", "failure_message": str(e), "updated_at": datetime.now(timezone.utc).isoformat()}},
+        )
+        raise HTTPException(status_code=502, detail=f"Payout provider error: {e}")
+
     return {
-        "message": "Payout requested successfully",
+        "message": "Payout requested successfully! Processing typically takes 3-5 business days.",
         "payout_id": payout_id,
-        "status": "pending"
+        "amount_eur": payout_req.amount_eur,
+        "method": user_doc["payout_method"],
+        "status": "processing" if live_result["provider_attempted"] else "pending",
+        "live": live_result,
+        "estimated_arrival": "3-5 business days"
     }
+
+# Admin endpoint to process payouts
+@api_router.post("/admin/process-payout/{payout_id}")
+async def admin_process_payout(payout_id: str, action: str = "approve", notes: Optional[str] = None):
+    """Admin endpoint to approve or reject payouts"""
+    payout = await db.payouts.find_one({"payout_id": payout_id}, {"_id": 0})
+    if not payout:
+        raise HTTPException(status_code=404, detail="Payout not found")
+    
+    if payout["status"] != "pending":
+        raise HTTPException(status_code=400, detail=f"Payout already {payout['status']}")
+    
+    now = datetime.now(timezone.utc).isoformat()
+    
+    if action == "approve":
+        # Mark as processing (in real system, would initiate actual transfer)
+        await db.payouts.update_one(
+            {"payout_id": payout_id},
+            {"$set": {"status": "processing", "updated_at": now, "notes": notes}}
+        )
+        return {"message": "Payout approved and processing", "payout_id": payout_id}
+    
+    elif action == "complete":
+        # Mark as completed
+        await db.payouts.update_one(
+            {"payout_id": payout_id},
+            {"$set": {"status": "completed", "completed_at": now, "updated_at": now, "notes": notes}}
+        )
+        return {"message": "Payout marked as completed", "payout_id": payout_id}
+    
+    elif action == "reject":
+        # Refund the amount back to user
+        user = await db.users.find_one({"user_id": payout["user_id"]}, {"_id": 0})
+        if user:
+            current_balance = user.get("payout_points", 0.0)
+            await db.users.update_one(
+                {"user_id": payout["user_id"]},
+                {"$set": {"payout_points": current_balance + payout["amount_eur"]}}
+            )
+        
+        await db.payouts.update_one(
+            {"payout_id": payout_id},
+            {"$set": {"status": "rejected", "updated_at": now, "notes": notes or "Payout rejected"}}
+        )
+        return {"message": "Payout rejected and amount refunded", "payout_id": payout_id}
+    
+    else:
+        raise HTTPException(status_code=400, detail="Invalid action. Use 'approve', 'complete', or 'reject'")
+
+# Get all pending payouts (admin)
+@api_router.get("/admin/pending-payouts")
+async def get_pending_payouts():
+    """Get all pending payouts for admin review"""
+    payouts = await db.payouts.find(
+        {"status": "pending"},
+        {"_id": 0}
+    ).sort("created_at", 1).to_list(100)
+    
+    # Enrich with user info
+    for payout in payouts:
+        user = await db.users.find_one(
+            {"user_id": payout["user_id"]},
+            {"_id": 0, "name": 1, "email": 1}
+        )
+        if user:
+            payout["user_name"] = user.get("name")
+            payout["user_email"] = user.get("email")
+    
+    return {"pending_payouts": payouts, "count": len(payouts)}
 
 @api_router.get("/users/me/payouts")
 async def get_my_payouts(request: Request):
@@ -2043,8 +2225,8 @@ async def get_rewards_info(request: Request):
     payout_points = user_doc.get("payout_points", 0.0) if user_doc else 0.0
     earnings_eur = user_doc.get("earnings_eur", 0.0) if user_doc else 0.0
     
-    # Calculate potential conversion value (now returns EUR directly)
-    potential_value_eur = calculate_payout_points(stars)
+    # Calculate potential conversion value (pass stars as both to get value for all stars at current tier)
+    potential_value_eur = calculate_payout_points(stars, stars)
     
     # Min payout threshold
     min_threshold = float(os.environ.get('MIN_PAYOUT_THRESHOLD_EUR', '20.0'))
@@ -2083,8 +2265,8 @@ async def convert_stars_to_points(request: Request, convert_req: ConvertStarsReq
     if convert_req.stars_to_convert > current_stars:
         raise HTTPException(status_code=400, detail=f"Insufficient stars. You have {current_stars} stars.")
     
-    # Calculate payout points value (now returns EUR directly)
-    points_value_eur = calculate_payout_points(convert_req.stars_to_convert)
+    # Calculate payout points value based on user's TOTAL stars (determines tier)
+    points_value_eur = calculate_payout_points(convert_req.stars_to_convert, current_stars)
     
     # Update user's stars and payout points
     await db.users.update_one(
@@ -2218,8 +2400,8 @@ async def setup_stripe_payout(request: Request, payout_req: StripePayoutRequest)
     tx_dict["created_at"] = tx_dict["created_at"].isoformat()
     await db.payment_transactions.insert_one(tx_dict)
     
-    # Deduct payout points
-    amount_usd = payout_req.amount_eur / float(os.environ.get('USD_TO_EUR_RATE', '0.92'))
+    # Deduct payout points (EUR → USD using live rate)
+    amount_usd = payout_req.amount_eur / get_converter().rate
     await db.users.update_one(
         {"user_id": user.user_id},
         {"$inc": {"payout_points": -amount_usd}}
@@ -2288,8 +2470,8 @@ async def setup_paypal_payout(request: Request, payout_req: PayPalPayoutRequest)
     tx_dict["created_at"] = tx_dict["created_at"].isoformat()
     await db.payment_transactions.insert_one(tx_dict)
     
-    # Deduct payout points
-    amount_usd = payout_req.amount_eur / float(os.environ.get('USD_TO_EUR_RATE', '0.92'))
+    # Deduct payout points (EUR → USD using live rate)
+    amount_usd = payout_req.amount_eur / get_converter().rate
     await db.users.update_one(
         {"user_id": user.user_id},
         {"$inc": {"payout_points": -amount_usd}}
@@ -2414,15 +2596,49 @@ import json as json_module
 # Initialize chat manager
 chat_manager = None
 location_service = None
+outfit_generator = None
+affiliate_engine = None
+stripe_connect_provider = None
+paypal_payouts_provider = None
+notification_service = None
 
 @app.on_event("startup")
 async def startup_chat_and_location():
-    global chat_manager, location_service
+    global chat_manager, location_service, outfit_generator, affiliate_engine
+    global stripe_connect_provider, paypal_payouts_provider, notification_service
     chat_manager = ChatManager(db)
     await chat_manager.initialize()
+    deps.chat_manager = chat_manager
     location_service = LocationService(db)
     await location_service.initialize()
-    logger.info("Chat manager and Location service initialized")
+
+    from outfit_generator import OutfitGenerator
+    from affiliate_engine import AffiliateEngine
+    from payouts_providers import StripeConnectProvider, PayPalPayoutsProvider
+    from notifications import NotificationService
+    outfit_generator = OutfitGenerator(db)
+    await outfit_generator.initialize()
+    affiliate_engine = AffiliateEngine(db)
+    await affiliate_engine.initialize()
+    stripe_connect_provider = StripeConnectProvider(db)
+    paypal_payouts_provider = PayPalPayoutsProvider(db)
+    notification_service = NotificationService(db)
+    await notification_service.initialize()
+
+    # Publish singletons to the shared deps container for route modules
+    import deps as _deps
+    _deps.outfit_generator = outfit_generator
+    _deps.affiliate_engine = affiliate_engine
+    _deps.stripe_connect_provider = stripe_connect_provider
+    _deps.paypal_payouts_provider = paypal_payouts_provider
+    _deps.notification_service = notification_service
+
+    # Live currency conversion: fetch once + start hourly refresh
+    converter = get_converter()
+    await converter.refresh()
+    converter.start_background_refresh()
+
+    logger.info("Chat, Location, Outfit, Affiliate, Payout, and Currency services initialized")
 
 # WebSocket endpoint for real-time chat
 @app.websocket("/ws/chat")
@@ -2915,6 +3131,125 @@ async def cleanup_test_data():
     results["post_locations_deleted"] = pl_result.deleted_count
     
     return {"message": "Test data cleaned up", "results": results}
+
+# ================= FRAUD DETECTION =================
+
+from fraud_detection import FraudDetectionService
+
+# Initialize fraud detection service
+fraud_service = None
+
+@app.on_event("startup")
+async def startup_fraud_detection():
+    global fraud_service
+    fraud_service = FraudDetectionService(db)
+    await fraud_service.initialize()
+    logger.info("Fraud detection service initialized")
+
+class DeviceFingerprintRequest(BaseModel):
+    user_agent: str
+    screen_resolution: str
+    timezone: str
+    language: str
+    platform: str
+    canvas_hash: Optional[str] = None
+    webgl_hash: Optional[str] = None
+    audio_hash: Optional[str] = None
+    fonts: Optional[str] = None
+
+@api_router.post("/security/fingerprint")
+async def record_fingerprint(request: Request, fingerprint: DeviceFingerprintRequest):
+    """Record device fingerprint during login/registration"""
+    user = await get_current_user(request)
+    if not user:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    
+    # Get client IP
+    ip_address = request.headers.get("X-Forwarded-For", request.client.host)
+    if ip_address and "," in ip_address:
+        ip_address = ip_address.split(",")[0].strip()
+    
+    result = await fraud_service.record_device_fingerprint(
+        user_id=user.user_id,
+        fingerprint_data=fingerprint.model_dump(),
+        ip_address=ip_address
+    )
+    
+    return result
+
+@api_router.get("/security/my-risk-score")
+async def get_my_risk_score(request: Request):
+    """Get current user's fraud risk score"""
+    user = await get_current_user(request)
+    if not user:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    
+    return await fraud_service.get_user_risk_score(user.user_id)
+
+@api_router.get("/admin/flagged-users")
+async def get_flagged_users(limit: int = 50):
+    """Admin: Get list of users flagged for potential fraud"""
+    return {"flagged_users": await fraud_service.get_flagged_users(limit)}
+
+@api_router.get("/admin/fraud-events")
+async def get_fraud_events(
+    user_id: Optional[str] = None,
+    event_type: Optional[str] = None,
+    limit: int = 100
+):
+    """Admin: Get fraud events log"""
+    events = await fraud_service.get_fraud_events(user_id, event_type, limit)
+    return {"events": events, "count": len(events)}
+
+@api_router.post("/admin/clear-user-flags/{user_id}")
+async def clear_user_flags(user_id: str):
+    """Admin: Clear fraud flags for a user"""
+    success = await fraud_service.clear_user_flags(user_id)
+    if success:
+        return {"message": f"Flags cleared for user {user_id}"}
+    raise HTTPException(status_code=404, detail="User not found")
+
+@api_router.post("/admin/flag-device")
+async def flag_device(fingerprint_hash: str, reason: str):
+    """Admin: Flag a device as fraudulent"""
+    success = await fraud_service.flag_device(fingerprint_hash, reason)
+    if success:
+        return {"message": "Device flagged successfully"}
+    raise HTTPException(status_code=404, detail="Device not found")
+
+@api_router.get("/admin/user-risk-score/{user_id}")
+async def get_user_risk_score_admin(user_id: str):
+    """Admin: Get risk score for any user"""
+    return await fraud_service.get_user_risk_score(user_id)
+
+# ================= MODULAR ROUTES =================
+# Populate shared deps container so route modules can access singletons
+deps.db = db
+deps.fraud_service = fraud_service
+deps.get_current_user = get_current_user
+
+from routes.outfits import router as outfits_router
+from routes.affiliate import router as affiliate_router
+from routes.payouts_live import router as payouts_live_router
+from routes.currency import router as currency_router
+from routes.notifications import router as notifications_router
+from routes.auth_extras import router as auth_extras_router
+from routes.captions import router as captions_router
+from routes.share import router as share_router
+from routes.stories import router as stories_router, ensure_story_indexes
+from routes.feed import router as feed_router
+from routes.post_products import router as post_products_router
+api_router.include_router(outfits_router)
+api_router.include_router(affiliate_router)
+api_router.include_router(payouts_live_router)
+api_router.include_router(currency_router)
+api_router.include_router(notifications_router)
+api_router.include_router(auth_extras_router)
+api_router.include_router(captions_router)
+api_router.include_router(share_router)
+api_router.include_router(stories_router)
+api_router.include_router(feed_router)
+api_router.include_router(post_products_router)
 
 # Include the router in the main app
 app.include_router(api_router)

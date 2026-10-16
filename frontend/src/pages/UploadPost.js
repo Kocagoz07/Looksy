@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import LocationPicker from "@/components/LocationPicker";
+import { AICaptionWriter } from "@/components/AICaptionWriter";
 import axios from "axios";
 import { toast } from "sonner";
 
@@ -259,6 +260,18 @@ export default function UploadPost() {
               className="font-manrope"
               rows={3}
             />
+            <AICaptionWriter
+              imageFile={imageFile}
+              onApply={setCaption}
+              context={{
+                draft: caption || null,
+                location: selectedLocation?.name || location || null,
+                venue: venue || null,
+                music: music || null,
+                products: products.map((p) => p.name).filter(Boolean),
+                total_price: totalPrice ? parseFloat(totalPrice) : null,
+              }}
+            />
           </div>
 
           {/* Music Link */}
@@ -326,7 +339,7 @@ export default function UploadPost() {
                   <div key={index} className="flex items-center gap-2 p-3 bg-gray-50 rounded-lg">
                     <div className="flex-1">
                       <p className="font-manrope text-sm font-semibold">{product.name}</p>
-                      <p className="font-manrope text-xs text-gray-500 truncate">{product.url}</p>
+                      <p className="font-manrope text-[10px] uppercase tracking-widest text-gray-500">Product Link</p>
                     </div>
                     <Button
                       type="button"

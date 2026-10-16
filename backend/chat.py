@@ -12,6 +12,7 @@ from typing import Optional, Dict, List, Set
 from dataclasses import dataclass, field
 from motor.motor_asyncio import AsyncIOMotorDatabase
 import logging
+import deps
 
 logger = logging.getLogger(__name__)
 
@@ -222,7 +223,8 @@ class ChatManager:
         conversation_id: str,
         sender_id: str,
         content: str,
-        message_type: str = "text"
+        message_type: str = "text",
+        extra: Optional[dict] = None
     ) -> dict:
         """Send a message to a conversation"""
         
@@ -257,6 +259,8 @@ class ChatManager:
             "is_deleted": False,
             "read_by": [sender_id]
         }
+        if extra:
+            message.update(extra)
         
         await self.db.chat_messages.insert_one(message)
         
@@ -277,6 +281,23 @@ class ChatManager:
             }
         )
         
+        if deps.notification_service:
+            if message_type == "post_share":
+                preview = "shared a post with you"
+            elif message_type == "text":
+                preview = f"sent you a message: {content[:60]}"
+            else:
+                preview = f"sent you a {message_type}"
+            for p in conversation.get("participants", []):
+                if p.get("user_id") != sender_id:
+                    try:
+                        await deps.notification_service.emit(
+                            p["user_id"], sender_id, "message",
+                            preview, conversation_id=conversation_id,
+                        )
+                    except Exception as e:
+                        logger.warning(f"Message notification failed: {e}")
+
         # Return without _id
         return {k: v for k, v in message.items() if k != "_id"}
     

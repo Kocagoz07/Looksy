@@ -1,0 +1,58 @@
+{
+  "summary": "Backend-only validation of (1) new live currency endpoints and (2) route extraction refactor into /app/backend/routes/. 60/60 pytest cases pass — 34 new + 26 regression. Live USD→EUR rate is 0.8613 from open.er-api.com, properly applied in /api/users/me/request-payout.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {
+        "endpoint": "POST /api/payouts/paypal/webhook",
+        "issue": "Still returns 400 'Invalid PayPal webhook signature' instead of 503 when PayPal is unconfigured (verify_webhook returns False before the configured check runs). Carry-over from iter8 — order the checks so _require_configured() runs first."
+      },
+      {
+        "endpoint": "POST /api/payouts/stripe/webhook",
+        "issue": "Carry-over from iter8: returns 400 'Invalid signature' even when Stripe is unconfigured (RuntimeError swallowed as generic Exception). Consider 503 for unconfigured branch."
+      }
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_currency_refactor.py",
+    "/app/backend/tests/test_outfit_affiliate.py",
+    "/app/test_reports/pytest/iter9_results.xml"
+  ],
+  "action_items": [
+    "(carry-over from iter8) Reorder PayPal webhook checks so unconfigured branch raises 503 before signature verification.",
+    "(carry-over from iter8) Stripe webhook should return 503 instead of 400 when Stripe is unconfigured."
+  ],
+  "critical_code_review_comments": [
+    "currency.py: start_background_refresh uses asyncio.get_event_loop() which is deprecated in Python 3.10+; on Python 3.12 it will emit DeprecationWarning. Prefer asyncio.get_running_loop() inside an async context (i.e. call start_background_refresh from within the FastAPI startup event coroutine where a loop is already running).",
+    "currency.py: CurrencyConverter._refresh_loop has no exception isolation around asyncio.sleep — if cancellation happens the task dies silently. Wrap the loop body in try/except asyncio.CancelledError and log; otherwise re-raise.",
+    "routes/payouts_live.py stripe_webhook handler catches plain `Exception` for verify_webhook failures (line 81-83). When provider.verify_webhook raises RuntimeError('Stripe Connect is not configured'), the caller gets 400 'Invalid signature' which is misleading (already flagged in iter8). Use `except RuntimeError -> 503; except Exception -> 400`.",
+    "routes/outfits.py: GET /outfits/{outfit_id} reads deps.db directly via .find_one(); rest of module delegates to deps.outfit_generator. Inconsistent layering — move this query into outfit_generator.get_outfit() for testability.",
+    "routes/affiliate.py: track_click endpoint relies on request.client.host for IP, but behind ingress this is the proxy IP not the real client. Honour X-Forwarded-For header for fraud_service IP checks.",
+    "deps.py: get_current_user is typed Optional[Callable] and read with await — if startup ordering ever fails to set it, every route raises 'NoneType is not callable' (500). Add a guard at startup that asserts deps.get_current_user is set before include_router runs, or fall back to a safer default that raises 503 'Auth not initialised'.",
+    "server.py is still 3211 lines — continue the extraction pattern (auth, posts, rewards, users) into routes/*. Iteration 9 only extracted 4 routers."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_currency_refactor.py (new — 34 tests for currency endpoints + outfit/affiliate/payouts router regression + request-payout live-rate verification)",
+    "/app/backend/tests/test_outfit_affiliate.py (updated test_affiliate_for_outfit/test_affiliate_for_post_empty to use auth_session — endpoints now require auth per refactor spec)",
+    "/app/test_reports/pytest/iter9_results.xml (new)"
+  ],
+  "success_rate": {"backend": "100%", "frontend": "skipped per request"},
+  "test_credentials": "testuser@looksy.com / test1234 / category=men (from /app/memory/test_credentials.md). user_id=user_899a61a17955. KYC verified, has outfits + affiliate links pre-seeded.",
+  "seed_data_creation": "TestRequestPayoutUsesLiveRate temporarily writes users.payout_points=50.0 + payout_method=paypal + paypal_email='test@looksy.com' directly in MongoDB for testuser, then cleans up: payout_points reset to 0; all 'pending' test payouts deleted in the finally block.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Run `pytest /app/backend/tests/test_currency_refactor.py /app/backend/tests/test_outfit_affiliate.py` for a full backend regression — 60 cases, ~21s. Live currency rate at test time was 0.8613 USD→EUR from open.er-api.com (fetched_at 2026-06-17T07:22Z). The currency endpoint refresh+cache works correctly and is consumed by /api/users/me/request-payout (verified via Mongo state: 20 EUR deducted from payout_points=50.0 leaves remaining<50). If real Stripe/PayPal keys are added, the *_unconfigured 503 tests in TestPayoutsLiveRouter will need to flip to 200/400.",
+  "verified_endpoints": {
+    "currency": ["GET /api/currency/rate (public, live 0.8613)", "POST /api/currency/refresh (401 unauth + 200 authed)"],
+    "outfits_refactored": ["GET /api/outfits/options", "GET /api/outfits/trending", "GET /api/outfits/mine", "GET/PUT /api/outfits/style-profile", "POST /api/outfits/{id}/save (404 unknown)", "GET /api/outfits/{outfit_id} (404 unknown)", "route ordering: literal routes resolve before /{outfit_id}"],
+    "affiliate_refactored": ["GET /api/affiliate/my-links", "GET /api/affiliate/my-stats", "POST /api/affiliate/suggest (auth)", "GET /api/affiliate/track/{id} (302 + 404)", "GET /api/affiliate/outfit/{id} (auth + ownership)", "GET /api/affiliate/post/{id} (auth + ownership)"],
+    "payouts_live_refactored": ["GET /api/payouts/providers/status (public)", "POST /api/payouts/stripe/connect (401, 503 unconfigured)", "POST /api/payouts/stripe/onboarding-link (401, 503)", "GET /api/payouts/stripe/status (401, 503)", "POST /api/payouts/stripe/webhook (400 bad sig)", "POST /api/payouts/paypal/webhook (400/503)"],
+    "regression": ["POST /api/auth/login", "GET /api/auth/me", "POST /api/users/me/request-payout (uses live rate)"]
+  },
+  "rca of the issue": "n/a — no production bugs. Two pre-existing tests in test_outfit_affiliate.py were failing post-refactor because /affiliate/outfit/{id} and /affiliate/post/{id} now require auth (per the refactor spec); tests updated to use auth_session."
+}

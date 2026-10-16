@@ -5,6 +5,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import RegisterModal from "@/components/RegisterModal";
+import { ForgotPasswordDialog } from "@/components/ForgotPasswordDialog";
+import { apiErrorMessage } from "@/utils/apiError";
 import axios from "axios";
 import { toast } from "sonner";
 
@@ -25,6 +27,7 @@ export default function LandingPage() {
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [registerOpen, setRegisterOpen] = useState(false);
+  const [forgotOpen, setForgotOpen] = useState(false);
   
   const [loading, setLoading] = useState(false);
   const [emailError, setEmailError] = useState("");
@@ -118,7 +121,7 @@ export default function LandingPage() {
       navigate("/dashboard", { replace: true });
     } catch (err) {
       console.error("Error logging in:", err);
-      toast.error(err.response?.data?.detail || "Invalid email or password");
+      toast.error(apiErrorMessage(err, "Invalid email or password"));
     } finally {
       setLoading(false);
     }
@@ -355,9 +358,21 @@ export default function LandingPage() {
                     )}
                   </Button>
 
+                  <div className="text-right -mt-2">
+                    <button
+                      type="button"
+                      data-testid="forgot-password-link"
+                      onClick={() => setForgotOpen(true)}
+                      className="font-manrope text-xs text-gray-500 hover:text-black transition-colors mr-5"
+                    >
+                      Forgot password?
+                    </button>
+                  </div>
+
                   <div className="text-center">
                     <button
                       type="button"
+                      data-testid="open-register-btn"
                       onClick={() => setRegisterOpen(true)}
                       className="font-manrope text-sm text-gray-600 hover:text-black transition-colors"
                     >
@@ -370,6 +385,8 @@ export default function LandingPage() {
           </div>
         </div>
       )}
+
+      <ForgotPasswordDialog key={String(forgotOpen)} open={forgotOpen} onOpenChange={setForgotOpen} initialEmail={loginEmail} />
 
       {/* Register Modal */}
       <RegisterModal 

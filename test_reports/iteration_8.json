@@ -1,0 +1,52 @@
+{
+  "summary": "Backend-only validation of Live Stripe Connect Express + PayPal Payouts endpoints (unconfigured branch) and regression of /api/users/me/request-payout, outfit + affiliate flows. 14/14 pytest cases passed against the live preview backend.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {
+        "endpoint": "POST /api/payouts/stripe/webhook",
+        "issue": "When Stripe is unconfigured, verify_webhook() raises RuntimeError('Stripe Connect is not configured'). Handler catches it as generic Exception and returns 400 'Invalid signature' — masking the real cause. Consider returning 503 (matching the PayPal webhook behaviour) so ops can distinguish 'bad signature' from 'provider not configured'."
+      },
+      {
+        "endpoint": "POST /api/payouts/paypal/webhook",
+        "issue": "verify_webhook() returns False (not raises) when PAYPAL_WEBHOOK_ID is unset BEFORE checking configured flag. As-is, an unauthenticated caller hitting the webhook gets 400 'Invalid PayPal webhook signature' instead of 503. Order the checks so _require_configured() runs first."
+      },
+      {
+        "endpoint": "/api/users/me/request-payout",
+        "issue": "Live transfer branch silently swallows misconfiguration: if provider.configured is False the live attempt is simply skipped and payout stays 'pending'. This is by design per the iteration brief, but there is no log line distinguishing 'skipped because unconfigured' from 'skipped because method mismatch'. Add an INFO log when live branch is skipped to aid ops."
+      }
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_live_payouts.py",
+    "/app/test_reports/pytest/iter8_results.xml"
+  ],
+  "action_items": [
+    "Decide whether Stripe webhook should return 503 (instead of 400 'Invalid signature') when Stripe is unconfigured — current behaviour is acceptable but misleading.",
+    "Reorder PayPal webhook checks so provider-not-configured raises 503 before signature verification.",
+    "Add INFO log in request_payout when the live provider branch is skipped because configured=False, to aid ops once real keys are added."
+  ],
+  "critical_code_review_comments": [
+    "payouts_providers._looks_like_real_stripe_key allows BOTH sk_live_ and sk_test_ keys (excluding only the literal 'sk_test_emergent'). Once real keys are pasted this works, but a real test-mode key still satisfies _looks_like_real_stripe_key — meaning the configured flag will flip to True even when STRIPE_API_KEY is a long-lived test key. That is intentional per Stripe docs but should be documented in the .env comments.",
+    "server.py is now 3524 lines; the new ~150 LOC live payouts block should live in routers/payouts_live.py and the providers module already exists — server.py just needs to delegate. Same recommendation as iter7.",
+    "request_payout deducts payout_points BEFORE attempting the live transfer and refunds on failure (good). However, between the deduction and the provider call the user could initiate another request-payout concurrently and over-spend. Wrap deduction + transfer attempt in a Mongo conditional update ({'$expr': {'$gte': ['$payout_points', amount]}}) or a transaction.",
+    "StripeConnectProvider.create_express_account uses business_type='individual' and country='DE' hard-coded; should accept user-supplied country (EU creators outside DE will need different defaults).",
+    "PayPalPayoutsProvider._get_token re-fetches a token on every call (TODO in code comment says tokens last ~9h). Cache the token in memory with an expiry to reduce auth-server load."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_live_payouts.py (new)",
+    "/app/test_reports/pytest/iter8_results.xml (new)"
+  ],
+  "success_rate": {"backend": "100%", "frontend": "skipped per request"},
+  "test_credentials": "testuser@looksy.com / test1234 / category=men (from /app/memory/test_credentials.md). KYC verified, payout_method=paypal pre-seeded.",
+  "seed_data_creation": "Regression test temporarily seeds users.payout_points=50.0 directly in MongoDB for testuser@looksy.com (no dev top-up API exists). Test deducts 20 EUR, then test data is cleaned up after the run (payout_points reset to 0; 2 'pending' test payouts deleted).",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "All 14 tests pass. Test file at /app/backend/tests/test_live_payouts.py covers: providers/status (public), 401 enforcement for /api/payouts/stripe/* (except webhook), 503 for /connect /onboarding-link /status when STRIPE_API_KEY is placeholder, Stripe webhook 400 on missing/bad signature, PayPal webhook 400/503 on missing signature, request-payout regression (creates pending payout + deducts payout_points when providers are unconfigured), outfit + affiliate regression from iter7. When real Stripe/PayPal keys are pasted into /app/backend/.env, the 503 test cases WILL flip to 200/400 — refactor them to skip when providers.configured=True. The regression test seeds Mongo directly because there is no dev top-up endpoint; if a real top-up API is added later, swap that in.",
+  "rca of the issue": "n/a — no bugs, this iteration is a guard-rail/regression validation."
+}

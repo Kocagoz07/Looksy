@@ -1,0 +1,40 @@
+{
+  "summary": "Backend (pytest 12/12) + Frontend (Playwright 6/6 phases) tests PASSED for Story product tags + Affiliate click tracking + Inbox/share-DM navigation. Backend validates product shape (name 1-80, URL http(s) with dot, max 5), normalises bare domains ('www.zara.com/x' -> https), rejects 'abc'/'javascript:'/'ftp://' with 422, auto-creates affiliate_links docs with story_id and retailer=domain-no-www. /api/stories/from-post inherits post.products with no body, respects empty [] body, and uses given overrides. /api/affiliate/track/{link_id} returns 302 to target and increments clicks; viewers endpoint returns product_clicks[] and total_clicks for owner. Frontend: composer product editor, 5-row cap (add btn disappears), name-only toast error, prefilled 5 Zara products when 'Add to story' from /post/post_433af74f4413, chip pauses story progress, Buy opens new tab to /api/affiliate/track/{id} which redirects to zara.com, owner viewers sheet shows per-product click list, Inbox button navigates to /chat, share-send single-recipient navigates to /chat/{conv_id}. Mobile 390x844: no horizontal overflow, 12 header buttons, composer scrolls and 'Share to story' stays visible.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "verified_flows": [
+    "POST /api/stories with products -> story.products [{link_id, name, price, retailer='zara.com'}] + affiliate_links doc with story_id (verified via /api/affiliate/my-links)",
+    "URL normalisation: 'www.zara.com/x/jeans' -> https://www.zara.com/x/jeans; invalid 'abc','javascript:...','ftp://' all 422",
+    "max_length=5 on products -> 422 on 6 items; min_length=1 on name -> 422 on empty",
+    "POST /api/stories/from-post/{id}: no body inherits post products (1..5); body {products:[]} => []; body {caption, products:[...]} uses given",
+    "GET /api/affiliate/track/{id} => 302 to zara.com; unknown link => 404; clicks increment",
+    "GET /api/stories/{id}/viewers (owner): product_clicks=[{link_id,name,clicks}], total_clicks>=1 after follower clicked",
+    "GET /api/stories/feed carries products[] on each story",
+    "POST /api/posts/{id}/share returns results[0].conversation_id used by frontend to navigate /chat/{conv_id}",
+    "FE composer: story-products-editor + story-product-add-btn + rows story-product-{name,price,url,remove}-{i}; 5-row cap hides add btn; name-only post triggers toast 'Each product needs a name and a link'",
+    "FE 'Add to your story' from Share dialog on /post/post_433af74f4413 closes dialog, opens composer, PREFILLS 5 Zara product rows (confirmed first row name='Winter Jacket Puff' url=https://www.zara.com/...)",
+    "FE viewer: story-products-strip + chips; clicking chip opens story-product-card (name+store+optional price+buy); progress bars freeze while open (verified widths unchanged over 1.5s), resume on close",
+    "FE buy btn: window.open popup URL contains '/api/affiliate/track/' and redirects to zara.com",
+    "FE owner viewers sheet shows story-product-clicks with 5 rows per-product counts (story-product-clicks-0 .. 4)",
+    "FE inbox-btn -> /chat; share-send with one recipient -> /chat/conv_667ef13ec6ee",
+    "Mobile 390x844: scrollWidth==clientWidth==390, 12 header buttons fit, composer scrolls, story-post-btn visible"
+  ],
+  "test_report_links": [
+    "/app/backend/tests/test_story_products_inbox.py",
+    "/app/test_reports/pytest/story_products_inbox.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "stories.story_from_post: when payload.products is None we iterate (post.get('products') or [])[:MAX_PRODUCTS]; if a post product has an invalid URL (ValueError in StoryProduct.http_url), we silently skip it. This matches the described behaviour but silently losing items should be surfaced in logs for ops.",
+    "affiliate.affiliate_track: redirect to a user-supplied URL (target_url) with 302 — ensure target_url is validated at write time (it is, via StoryProduct.http_url) so no open-redirect attack vector; current validation only allows http/https + has '.' in netloc, which is sufficient.",
+    "StoryProducts.ProductCardSheet.buy uses window.open noopener but does not use rel=noreferrer; minor privacy concern (not a bug).",
+    "InboxButton polls /api/chat/unread-count every 30s but silently swallows errors — fine; consider pausing when document is hidden to save polling."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "100% (12/12)", "frontend": "100% (6/6 phases)"},
+  "test_credentials": "testuser@looksy.com/test1234/men (user_899a61a17955); newuser456@looksy.com/test1234/women (user_2e79eca385b6)",
+  "seed_data_creation": "Created 3 TEST_ stories on testuser (one upload with products, one from-post w/ prefilled products, one for click tracking). Cleanup fixture deletes oldest TEST_* stories keeping 2 newest. Also created a product click (newuser clicked Buy twice).",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Login via page.request.post /api/auth/login then page.goto. Testuser now owns multiple stories with products (incl. a chain of 5 Zara products from post_433af74f4413). The viewers sheet product_clicks list may show 0 counts on freshly uploaded stories — only the story used in TestAffiliateTrack has recorded clicks (that story is deleted post-test). To re-observe non-zero counts, create a new story with products as testuser, view+click Buy as newuser, then open viewers sheet. All data-testids documented in verified_flows."
+}
