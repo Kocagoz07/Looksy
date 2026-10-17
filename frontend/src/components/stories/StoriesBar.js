@@ -34,14 +34,20 @@ export const StoriesBar = ({ currentUser }) => {
   const inputRef = useRef(null);
 
   const load = useCallback(() => {
-    axios.get(`${BACKEND_URL}/api/stories/feed`, { withCredentials: true })
-      .then(({ data }) => setGroups(data.groups)).catch(() => {});
-  }, []);
+  axios.get(`${BACKEND_URL}/api/stories/feed`, { withCredentials: true })
+    .then(({ data }) => {
+      setGroups(Array.isArray(data?.groups) ? data.groups : []);
+    })
+    .catch(() => {
+      setGroups([]);
+    });
+}, []);
 
   useEffect(() => { load(); }, [load]);
 
-  const mine = groups.find((gr) => gr.is_me);
-  const others = groups.filter((gr) => !gr.is_me);
+ const safeGroups = Array.isArray(groups) ? groups : [];
+const mine = safeGroups.find((gr) => gr.is_me);
+const others = safeGroups.filter((gr) => !gr.is_me);
 
   const pickFile = (e) => {
     const f = e.target.files?.[0];

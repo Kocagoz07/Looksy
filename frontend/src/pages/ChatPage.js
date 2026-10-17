@@ -98,23 +98,20 @@ const ChatPage = ({ user }) => {
           setMessages(prev => [...prev, data.message]);
         }
         // Update conversation list
-        setConversations(prev => {
-          const updated = prev.map(conv => {
-            if (conv.conversation_id === data.message.conversation_id) {
-              return {
-                ...conv,
-                last_message: {
-                  content: data.message.content,
-                  sender_id: data.message.sender_id,
-                  sent_at: data.message.created_at
-                },
-                updated_at: data.message.created_at
-              };
-            }
-            return conv;
-          });
-          return updated.sort((a, b) => new Date(b.updated_at) - new Date(a.updated_at));
-        });
+     setConversations(prev => {
+  const list = Array.isArray(prev) ? prev : [];
+
+  if (
+    !list.find(
+      c => c.conversation_id === conversation.conversation_id
+    )
+  ) {
+    return [conversation, ...list];
+  }
+
+  return list;
+});
+            
         break;
       
       case 'message:sent':
@@ -216,7 +213,8 @@ const ChatPage = ({ user }) => {
   // Load conversation from URL param
   useEffect(() => {
     if (conversationId && conversations.length > 0 && !targetUserId) {
-      const conv = conversations.find(c => c.conversation_id === conversationId);
+      const conv = (Array.isArray(conversations) ? conversations : [])
+  .find(c => c.conversation_id === conversationId);
       if (conv) {
         selectConversation(conv);
       }

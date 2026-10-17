@@ -139,7 +139,19 @@ export const ChatProvider = ({ children, user }) => {
       const response = await axios.get(`${API}/api/chat/conversations`, {
         withCredentials: true
       });
-      setConversations(response.data.conversations || []);
+      setConversations(prev => {
+  prev = Array.isArray(prev) ? prev : [];
+
+  if (
+    !prev.find(
+      c => c.conversation_id === conversation.conversation_id
+    )
+  ) {
+    return [conversation, ...prev];
+  }
+
+  return prev;
+});
     } catch (error) {
       console.error('Error fetching conversations:', error);
     }
